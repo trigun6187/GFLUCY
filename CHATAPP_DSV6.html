@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>OpenRouter Chat</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin:0; padding:0; }
+    html, body { height: 100%; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: #0f0f0f;
+      color: #e5e5e5;
+      min-height: 100dvh;
+      overflow: hidden;
+    }
+    :root{
+      --bg:#0f0f0f; --panel:#121212; --panel-2:#1b1b1b; --border:rgba(255,255,255,0.12);
+      --text:#e5e5e5; --muted:#a9a9a9; --accent:#10a37f;
+      --chip:#202020; --chip-bd:rgba(255,255,255,0.15);
+      --sidebar:#101010; --sidebar-bd:#1f1f1f;
+    }
+
+    .wrapper{ display:flex; justify-content:center; align-items:center; height:100dvh; width:100%; padding: 12px; }
+    .shell{ width:100%; max-width: 1200px; height:100%; display:flex; gap:12px; }
+
+    /* Sidebar */
+    .sidebar{
+      width: 280px; min-width: 240px; max-width: 320px;
+      background: var(--sidebar); border:1px solid var(--sidebar-bd);
+      border-radius: 12px; display:flex; flex-direction:column; overflow:hidden;
+    }
+    .sb-header{ padding:10px; border-bottom:1px solid var(--sidebar-bd); display:flex; gap:8px; }
+    .sb-btn{ flex:1; padding:10px 12px; background:#1e1e1e; color:#e5e5e5; border:1px solid var(--border); border-radius:10px; cursor:pointer; font-weight:600; }
+    .sb-btn:hover{ background:#242424; }
+    .sb-list{ flex:1; min-height:0; overflow:auto; padding:6px; display:flex; flex-direction:column; gap:6px; }
+    .chat-item{ display:flex; align-items:center; gap:8px; padding:10px; border-radius:10px; border:1px solid transparent; cursor:pointer; }
+    .chat-item:hover{ background:#191919; }
+    .chat-item.active{ background:#17352c; border-color:#235c4a; }
+    .chat-title{ flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .del-btn{ background:transparent; border:none; color:#aaa; cursor:pointer; font-size:16px; }
+    .del-btn:hover{ color:#fff; }
+
+    /* Main panel */
+    .main{
+      flex:1; min-width:0; display:flex; flex-direction:column;
+      background: var(--panel); border:1px solid var(--border); border-radius: 12px; overflow:hidden;
+    }
+
+    /* Header */
+    .header{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding: 10px 12px; background: var(--panel-2); border-bottom:1px solid var(--border); }
+    .left { display:flex; align-items:center; gap:10px; }
+    .hamburger{ display:none; }
+    .title{ font-weight:600; color:#fff; }
+    .right { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+    .status{ display:flex; align-items:center; gap:8px; color:var(--muted); font-size: 0.9rem; }
+    .dot{ width:8px; height:8px; border-radius:50%; background:#35d48c; }
+
+    /* SEARCHABLE MODEL DROPDOWN */
+    .model-wrap{ display:flex; align-items:center; gap:8px; }
+    .model-wrap label{ color:var(--muted); font-size:.9rem; }
+    .model-search{ position:relative; display:flex; align-items:center; }
+    .model-input{
+      background:#1c1c1c; color:#fff; border:1px solid var(--border); border-radius:10px 0 0 10px;
+      padding:8px 10px; width: 320px; max-width: 44vw; outline:none;
+    }
+    .model-input:focus{ box-shadow: 0 0 0 2px rgba(16,163,127,.4); }
+    .model-arrow{
+      height: 36px; padding:0 10px; border:1px solid var(--border); border-left:none;
+      background:#1c1c1c; color:#e5e5e5; border-radius:0 10px 10px 0; cursor:pointer;
+    }
+    .model-arrow:hover{ background:#232323; }
+    .model-options{
+      position:absolute; top:108%; left:0; right:0;
+      background:#1b1b1b; border:1px solid var(--border); border-radius:10px; overflow:auto;
+      max-height:320px; z-index:20; display:none;
+      box-shadow: 0 10px 28px rgba(0,0,0,.35);
+    }
+    .model-option{ padding:10px 12px; cursor:pointer; border-bottom:1px solid rgba(255,255,255,.06); display:flex; gap:8px; align-items:center; }
+    .model-option:last-child{ border-bottom:none; }
+    .model-option small{ color:#a9a9a9; }
+    .model-option:hover, .model-option.active{ background:#242424; }
+
+    /* Connect card */
+    #connectScreen{ flex:1; display:flex; align-items:center; justify-content:center; }
+    .connect-card{
+      background: #171717; border:1px solid var(--border); padding:28px; border-radius:16px;
+      width:100%; max-width:520px;
+    }
+    .connect-card h1{ font-size:1.4rem; margin-bottom:8px; }
+    .connect-card p{ color:#c2c2c2; margin-bottom:14px; }
+    .api-row{ display:flex; align-items:center; gap:8px; }
+    .api-input{
+      flex:1; padding:12px 14px; font-size:16px; border-radius:10px; border:1px solid var(--border);
+      background:#131313; color:#fff; outline:none;
+    }
+    .api-input:focus{ box-shadow: 0 0 0 2px rgba(16,163,127,.35); }
+    .masked{ -webkit-text-security: disc; text-security: disc; }
+    .mask-toggle{ padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:#1c1c1c; color:#ddd; cursor:pointer; }
+    .connect-actions{ display:flex; gap:10px; margin-top:12px; }
+    .connect-btn{ flex:1; padding:12px 14px; font-size: 16px; border-radius:10px; border:none; background: var(--accent); color:#fff; cursor:pointer; font-weight:600; }
+    .connect-btn:hover{ filter: brightness(1.05); }
+
+    /* ChatScreen must be a flex column that grows and allows child to scroll */
+    #chatScreen{
+      display:none;
+      flex: 1 1 auto;
+      min-height: 0;
+      flex-direction: column;
+      width: 100%;
+    }
+
+    /* Chat area */
+    #chatArea{
+      display:flex; flex-direction:column; gap:14px; padding:12px;
+      flex: 1 1 auto;       /* fill the available height under the header */
+      min-height:0;         /* allow the inner scroller to size correctly */
+      width:100%;
+    }
+    #chat{
+      flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:16px; padding: 4px 6px;
+      width:100%;
+    }
+
+    /* Make rows and input area span full width */
+    .msg{ display:flex; gap:8px; width:100%; }
+    .input-wrap{ display:flex; flex-direction:column; gap:10px; padding:10px 12px; border-top:1px solid var(--border); background: var(--panel-2); align-items:stretch; width:100%; }
+    .chatbar{ position:relative; display:flex; align-items:center; gap:10px; background:#1c1c1c; border:1px solid var(--border); border-radius:28px; padding:8px 10px; width:100%; }
+
+    .msg.ai{ flex-direction:column; align-items:flex-start; }
+    .msg.user{ flex-direction:column; align-items:flex-end; }
+
+    .bubble{ max-width: 85%; background:#1e1e1e; border:1px solid var(--border); padding:12px 14px; border-radius:14px; line-height:1.55; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+    .user .bubble{ background:#143a2f; border-color:#1e5c49; }
+    .ai .bubble{ background:#1a1a1a; }
+    .meta{ margin-top:6px; color:var(--muted); font-size:12px; }
+
+    .ai-tools{ margin-top:6px; display:flex; gap:8px; align-items:center; }
+    .regen-btn{ background:#232323; border:1px solid var(--border); color:#e5e5e5; font-size:12px; padding:4px 8px; border-radius:8px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; opacity:.9; }
+    .regen-btn:hover{ opacity:1; background:#2a2a2a; }
+
+    .ai-reply pre code{ display:block; padding:12px; background:#0f0f0f; border-radius:8px; }
+    .copy-btn{ display:inline-block; margin-top:6px; background:#2a2a2a; color:#fff; border:none; font-size:12px; padding:4px 8px; border-radius:6px; cursor:pointer; opacity:.85; }
+    .copy-btn:hover{ opacity:1; }
+
+    #attachments{ display:flex; flex-wrap:wrap; gap:8px; }
+    .chip{ position:relative; display:flex; align-items:center; gap:8px; background:var(--chip); border:1px solid var(--chip-bd); border-radius:12px; padding:6px 8px; max-width:220px; overflow:hidden; }
+    .chip img, .chip video{ width:44px; height:44px; border-radius:8px; object-fit:cover; }
+    .chip .name{ font-size:12px; color:#ddd; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:140px; }
+    .chip .x{ margin-left:auto; background:#2a2a2a; border:none; color:#fff; font-size:12px; padding:3px 6px; border-radius:6px; cursor:pointer; }
+
+    .plus-btn{ width:36px; height:36px; flex:0 0 auto; border-radius:50%; display:flex; align-items:center; justify-content:center; background:#2a2a2a; border:1px solid var(--border); color:#fff; cursor:pointer; }
+    .plus-btn:hover{ background:#323232; }
+
+    .textarea{ flex:1 1 auto; display:block; min-height:44px; max-height:30vh; padding:12px 10px; line-height:1.4; background:transparent; border:none; color:#fff; outline:none; resize:none; overflow:auto; font: inherit; }
+
+    .send-btn{ width:38px; height:38px; flex:0 0 auto; border-radius:50%; display:flex; align-items:center; justify-content:center; background:#2f2f2f; border:1px solid var(--border); color:#fff; cursor:pointer; font-weight:700; }
+    .send-btn.ready{ background: var(--accent); border-color: transparent; }
+    .send-btn.ready:hover{ filter: brightness(1.05); }
+    .send-btn.stop{ background:#444; }
+    .send-btn:disabled{ opacity:.5; cursor: not-allowed; }
+
+    .menu{ position:absolute; bottom:64px; left:16px; background:#1b1b1b; border:1px solid var(--border); border-radius:12px; padding:6px; display:none; flex-direction:column; min-width:220px; box-shadow:0 10px 30px rgba(0,0,0,.35); z-index:10; }
+    .menu .item{ display:flex; align-items:center; gap:10px; padding:10px; border-radius:8px; cursor:pointer; color:#e5e5e5; }
+    .menu .item:hover{ background:#242424; }
+    .menu .icon{ width:22px; height:22px; display:flex; align-items:center; justify-content:center; background:#2a2a2a; border-radius:6px; font-size:12px; }
+
+    #systemModal{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); align-items:center; justify-content:center; z-index:100; }
+    .modal-card{ width:min(640px, 92vw); background:#161616; border:1px solid var(--border); border-radius:14px; padding:16px; }
+    .modal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+    .modal-head h3{ margin:0; font-size:1.1rem; }
+    .close{ background:#2a2a2a; border:1px solid var(--border); color:#fff; border-radius:8px; padding:6px 10px; cursor:pointer; }
+    #systemPrompt{ width:100%; min-height:140px; background:#111; color:#fff; border:1px solid var(--border); border-radius:10px; padding:10px; }
+
+    @media (max-width: 980px){
+      .shell{ gap:8px; }
+      .sidebar{ position:absolute; left:12px; top:12px; bottom:12px; z-index:50; transform: translateX(-110%); transition: transform .2s ease; }
+      .sidebar.show{ transform: translateX(0); }
+      .hamburger{ display:inline-flex; background:#1e1e1e; border:1px solid var(--border); color:#fff; padding:8px 10px; border-radius:8px; cursor:pointer; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="shell">
+      <aside class="sidebar" id="sidebar">
+        <div class="sb-header">
+          <button class="sb-btn" id="newChatBtn">+ New chat</button>
+        </div>
+        <div class="sb-list" id="chatList"></div>
+      </aside>
+
+      <div class="main">
+        <div class="header">
+          <div class="left">
+            <button class="hamburger" id="hamburger">☰</button>
+            <div class="title" id="chatTitle">OpenRouter Chat</div>
+          </div>
+          <div class="right">
+            <div class="model-wrap">
+              <label for="modelInput">Model</label>
+              <div class="model-search" id="modelSearch">
+                <input id="modelInput" class="model-input" type="search" inputmode="search" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" name="model-search" data-lpignore="true" data-1p-ignore data-bwignore="true" placeholder="Search model…"/>
+                <button id="modelArrow" class="model-arrow" title="Show models">▾</button>
+                <div id="modelOptions" class="model-options"></div>
+              </div>
+            </div>
+            <div class="status"><span class="dot"></span><span>Connected</span></div>
+          </div>
+        </div>
+
+        <div id="connectScreen">
+          <div class="connect-card" id="connectCard" autocomplete="off">
+            <h1>Connect your API key</h1>
+            <p>We never save your key. Autofill and password prompts are disabled.</p>
+            <div class="api-row">
+              <input id="userKey" class="api-input masked" type="text" inputmode="latin" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" name="not-a-login" data-lpignore="true" data-1p-ignore data-bwignore="true" aria-autocomplete="none" placeholder="Your OpenRouter API Key"/>
+              <button id="maskToggle" class="mask-toggle" type="button">Show</button>
+            </div>
+            <div class="connect-actions">
+              <button id="connectBtn" class="connect-btn">Connect</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="chatScreen" style="display:none">
+          <div id="chatArea">
+            <div id="chat"></div>
+
+            <div class="input-wrap">
+              <div id="attachments"></div>
+
+              <div class="chatbar" id="chatbar">
+                <button class="plus-btn" id="plusBtn">+</button>
+                <textarea id="userMessage" class="textarea" placeholder="Ask anything"></textarea>
+                <button id="sendBtn" class="send-btn" title="Send">➤</button>
+
+                <div id="plusMenu" class="menu">
+                  <div class="item" id="menuUpload"><div class="icon">📎</div><div>Upload image or video</div></div>
+                  <div class="item" id="menuSystem"><div class="icon">⚙️</div><div>Set system prompt</div></div>
+                </div>
+
+                <input id="fileInput" type="file" accept="image/*,video/*" style="display:none" multiple>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div><!-- main -->
+    </div><!-- shell -->
+  </div>
+
+  <div id="systemModal">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3>System Prompt</h3>
+        <button class="close" id="closeSystem">Close</button>
+      </div>
+      <textarea id="systemPrompt" placeholder="You are a helpful assistant."></textarea>
+    </div>
+  </div>
+
+  <script>
+    function escapeHtml(str){ return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
+    function getTimestamp(){ const d=new Date(); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+    function autosize(el){ requestAnimationFrame(()=>{ el.style.height='auto'; const base=44; const h=Math.max(base, Math.min(el.scrollHeight, window.innerHeight*0.3)); el.style.height=h+'px'; }); }
+    function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+
+    marked.setOptions({ highlight: function(code, lang){ try{ if(lang && hljs.getLanguage(lang)) return hljs.highlight(code, {language:lang}).value; return hljs.highlightAuto(code).value; }catch(e){ return code; } } });
+
+    let storedKey=''; let modelList=[]; let controller=null; let isStreaming=false;
+    let lastMessage=''; let lastSystemPrompt=''; let lastModel=''; let lastAttachments=[];
+    const attachments=[]; let attachmentId=0;
+
+    let chats=[]; let activeChatId=null;
+
+    const sidebar=document.getElementById('sidebar');
+    const chatList=document.getElementById('chatList');
+    const newChatBtn=document.getElementById('newChatBtn');
+    const hamburger=document.getElementById('hamburger');
+    const chatTitleEl=document.getElementById('chatTitle');
+
+    const connectScreen=document.getElementById('connectScreen');
+    const chatScreen=document.getElementById('chatScreen');
+    const chat=document.getElementById('chat');
+
+    const userKey=document.getElementById('userKey');
+    const maskToggle=document.getElementById('maskToggle');
+    const connectBtn=document.getElementById('connectBtn');
+
+    const modelInput=document.getElementById('modelInput');
+    const modelOptions=document.getElementById('modelOptions');
+    const modelArrow=document.getElementById('modelArrow');
+    let activeModelIndex=-1;
+
+    const sendBtn=document.getElementById('sendBtn');
+    const userMessage=document.getElementById('userMessage');
+    const plusBtn=document.getElementById('plusBtn');
+    const plusMenu=document.getElementById('plusMenu');
+    const menuUpload=document.getElementById('menuUpload');
+    const menuSystem=document.getElementById('menuSystem');
+    const fileInput=document.getElementById('fileInput');
+    const attachmentsDiv=document.getElementById('attachments');
+
+    const systemModal=document.getElementById('systemModal');
+    const systemPromptEl=document.getElementById('systemPrompt');
+    const closeSystem=document.getElementById('closeSystem');
+
+    function loadStorage(){
+      try{ chats=JSON.parse(localStorage.getItem('orchats_v1')||'[]'); activeChatId=localStorage.getItem('orchats_active')||null; }catch(e){ chats=[]; activeChatId=null; }
+      if(!chats.length){ const c=createChat('New chat'); setActiveChat(c.id); }
+      if(!activeChatId){ setActiveChat(chats[0].id); }
+      renderSidebar(); renderActiveChat();
+    }
+    function saveStorage(){ localStorage.setItem('orchats_v1', JSON.stringify(chats)); localStorage.setItem('orchats_active', activeChatId||''); }
+    function createChat(title='New chat'){ const c={ id:uid(), title, model:'', systemPrompt:'', messages:[], created:Date.now() }; chats.unshift(c); saveStorage(); renderSidebar(); return c; }
+    function deleteChat(id){ const idx=chats.findIndex(x=>x.id===id); if(idx<0) return; chats.splice(idx,1); if(!chats.length){ const c=createChat('New chat'); activeChatId=c.id; } if(activeChatId===id){ activeChatId=chats[0].id; } saveStorage(); renderSidebar(); renderActiveChat(); }
+    function setActiveChat(id){ activeChatId=id; saveStorage(); renderSidebar(); renderActiveChat(); }
+    function getActiveChat(){ return chats.find(x=>x.id===activeChatId); }
+    function updateChatTitleFromMessage(msg){ const c=getActiveChat(); if(!c) return; if(!c.title || c.title==='New chat'){ const t=(msg||'(no text)').trim().replace(/\s+/g,' ').slice(0,50); c.title=t||'New chat'; renderSidebar(); saveStorage(); } }
+    function renderSidebar(){
+      chatList.innerHTML='';
+      chats.forEach(c=>{
+        const item=document.createElement('div'); item.className='chat-item'+(c.id===activeChatId?' active':'');
+        const title=document.createElement('div'); title.className='chat-title'; title.textContent=c.title||'New chat';
+        const del=document.createElement('button'); del.className='del-btn'; del.title='Delete'; del.textContent='🗑';
+        del.addEventListener('click', (e)=>{ e.stopPropagation(); if(confirm('Delete this chat?')) deleteChat(c.id); });
+        item.appendChild(title); item.appendChild(del);
+        item.addEventListener('click', ()=>setActiveChat(c.id));
+        chatList.appendChild(item);
+      });
+    }
+
+    function renderActiveChat(){
+      const c=getActiveChat(); if(!c) return;
+      chatTitleEl.textContent=c.title||'OpenRouter Chat';
+      modelInput.value = c.model || modelInput.value || '';
+      systemPromptEl.value = c.systemPrompt || '';
+      chat.innerHTML='';
+      c.messages.forEach((m)=>{
+        if(m.role==='user'){
+          const row=document.createElement('div'); row.className='msg user';
+          const b=document.createElement('div'); b.className='bubble';
+          b.innerHTML = `${escapeHtml(m.viewText || m.contentText || '(no text)')}<div class="meta">${new Date(m.time||Date.now()).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>`;
+          row.appendChild(b); chat.appendChild(row);
+        }else if(m.role==='assistant'){
+          const row=document.createElement('div'); row.className='msg ai';
+          const b=document.createElement('div'); b.className='bubble ai-reply';
+          b.innerHTML = marked.parse(m.content || '') + `<div class="meta">${new Date(m.time||Date.now()).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>`;
+          row.appendChild(b);
+          b.querySelectorAll('pre code').forEach(block=>{
+            hljs.highlightElement(block);
+            const pre=block.parentElement;
+            if(!pre.nextElementSibling || !pre.nextElementSibling.classList.contains('copy-btn')){
+              const btn=document.createElement('button'); btn.className='copy-btn'; btn.textContent='Copy';
+              btn.addEventListener('click',()=>{ navigator.clipboard.writeText(block.innerText).then(()=>{ btn.textContent='✅'; setTimeout(()=>btn.textContent='Copy',1200); }); });
+              pre.insertAdjacentElement('afterend', btn);
+            }
+          });
+          const isLastAssistant = c.messages.slice().reverse().find(x=>x.role==='assistant') === m;
+          if(isLastAssistant){
+            const tools=document.createElement('div'); tools.className='ai-tools';
+            const regen=document.createElement('button'); regen.className='regen-btn'; regen.textContent='⟲ Regenerate';
+            regen.addEventListener('click', regenerateMessage);
+            tools.appendChild(regen); row.appendChild(tools);
+          }
+          chat.appendChild(row);
+        }
+      });
+      chat.scrollTop=chat.scrollHeight;
+    }
+
+    maskToggle.addEventListener('click', ()=>{ userKey.classList.toggle('masked'); maskToggle.textContent=userKey.classList.contains('masked')?'Show':'Hide'; userKey.focus(); });
+    connectBtn.addEventListener('click', loadModels);
+    userKey.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); loadModels(); } });
+
+    async function loadModels(){
+      const apiKey=userKey.value.trim(); if(!apiKey){ alert('Please enter your API key'); return; }
+      try{
+        const resp=await fetch('https://openrouter.ai/api/v1/models',{ headers:{ Authorization:'Bearer '+apiKey, 'X-Title':'OpenRouter Chat (no server)' }});
+        if(!resp.ok){ const t=await resp.text().catch(()=> ''); alert('Failed to fetch models.\n'+t); return; }
+        const data=await resp.json();
+        modelList=data?.data||[]; storedKey=apiKey;
+
+        const preferred='openai/gpt-oss-20b:free';
+        modelInput.value = modelList.some(m=>m.id===preferred) ? preferred : (modelList[0]?.id||'');
+
+        renderModelOptions('');
+        connectScreen.style.display='none';
+        chatScreen.style.display='flex';  // keep flex so input sticks to bottom
+        userMessage.value=''; autosize(userMessage); updateSendState(); userMessage.focus();
+        connectScreen.remove();
+      }catch(err){ alert('Error: '+err.message); }
+    }
+
+    function openModelOptions(){ modelOptions.style.display='block'; ensureModelActiveVisible(); }
+    function closeModelOptions(){ modelOptions.style.display='none'; activeModelIndex=-1; updateModelActive(); }
+    function toggleModelOptions(){ if(modelOptions.style.display==='block') closeModelOptions(); else openModelOptions(); }
+    function renderModelOptions(filter=''){
+      const q=(filter||'').toLowerCase().trim();
+      const items=modelList.filter(m=>{ const id=(m.id||'').toLowerCase(); const name=(m.name||'').toLowerCase(); return !q || id.includes(q) || name.includes(q); });
+      modelOptions.innerHTML='';
+      if(!items.length){
+        const div=document.createElement('div'); div.className='model-option'; div.style.cursor='default'; div.style.opacity='.7'; div.textContent='No matches'; modelOptions.appendChild(div); activeModelIndex=-1; return;
+      }
+      items.forEach(m=>{
+        const opt=document.createElement('div'); opt.className='model-option'; opt.dataset.id=m.id;
+        opt.innerHTML=`<div>${escapeHtml(m.id)}${m.name?` <small>– ${escapeHtml(m.name)}</small>`:''}</div>`;
+        modelOptions.appendChild(opt);
+      });
+      if(activeModelIndex>=modelOptions.children.length) activeModelIndex=-1; updateModelActive();
+    }
+    function updateModelActive(){ Array.from(modelOptions.children).forEach((el,idx)=>el.classList.toggle('active', idx===activeModelIndex)); }
+    function ensureModelActiveVisible(){
+      const el=modelOptions.querySelector('.model-option.active'); if(!el) return;
+      const top=el.offsetTop, bottom=top+el.offsetHeight, viewTop=modelOptions.scrollTop, viewBottom=viewTop+modelOptions.clientHeight;
+      if(top<viewTop) modelOptions.scrollTop=top; else if(bottom>viewBottom) modelOptions.scrollTop=bottom-modelOptions.clientHeight;
+    }
+    modelArrow.addEventListener('click', e=>{ e.stopPropagation(); if(!modelOptions.innerHTML) renderModelOptions(modelInput.value); toggleModelOptions(); });
+    modelInput.addEventListener('focus', ()=>{ renderModelOptions(modelInput.value); openModelOptions(); });
+    modelInput.addEventListener('input', e=>{ renderModelOptions(e.target.value); openModelOptions(); });
+    modelInput.addEventListener('keydown', e=>{
+      const visible=modelOptions.style.display==='block'; const opts=modelOptions.querySelectorAll('.model-option'); if(!visible||!opts.length) return;
+      if(e.key==='ArrowDown'){ e.preventDefault(); activeModelIndex=(activeModelIndex+1)%opts.length; updateModelActive(); ensureModelActiveVisible(); }
+      else if(e.key==='ArrowUp'){ e.preventDefault(); activeModelIndex=(activeModelIndex-1+opts.length)%opts.length; updateModelActive(); ensureModelActiveVisible(); }
+      else if(e.key==='Enter'){ e.preventDefault(); const target=activeModelIndex>=0?opts[activeModelIndex]:opts[0]; if(target&&target.dataset.id){ modelInput.value=target.dataset.id; closeModelOptions(); saveModelToChat(); } }
+      else if(e.key==='Escape'){ closeModelOptions(); }
+    });
+    modelOptions.addEventListener('click', e=>{
+      const item=e.target.closest('.model-option'); if(item&&item.dataset.id){ modelInput.value = item.dataset.id; closeModelOptions(); saveModelToChat(); }
+    });
+    document.addEventListener('click', e=>{ const box=document.getElementById('modelSearch'); if(!box.contains(e.target)) closeModelOptions(); });
+    function currentModelId(){ const typed=modelInput.value.trim(); return typed || 'openai/gpt-oss-20b:free'; }
+    function saveModelToChat(){ const c=getActiveChat(); if(!c) return; c.model=currentModelId(); saveStorage(); }
+
+    hamburger.addEventListener('click', ()=>{ sidebar.classList.toggle('show'); });
+    document.addEventListener('click', e=>{ if(window.innerWidth<=980){ const inside = sidebar.contains(e.target) || hamburger.contains(e.target); if(!inside) sidebar.classList.remove('show'); } });
+
+    function toggleMenu(show){ if(typeof show==='boolean') plusMenu.style.display=show?'flex':'none'; else plusMenu.style.display=plusMenu.style.display==='flex'?'none':'flex'; }
+    plusBtn.addEventListener('click', e=>{ e.stopPropagation(); toggleMenu(); });
+    document.addEventListener('click', e=>{ if(!plusMenu.contains(e.target) && e.target!==plusBtn) toggleMenu(false); });
+    menuUpload.addEventListener('click', ()=>{ toggleMenu(false); fileInput.click(); });
+    menuSystem.addEventListener('click', ()=>{ toggleMenu(false); systemModal.style.display='flex'; });
+
+    closeSystem.addEventListener('click', ()=> systemModal.style.display='none');
+    window.addEventListener('click', e=>{ if(e.target===systemModal) systemModal.style.display='none'; });
+
+    fileInput.addEventListener('change', async (e)=>{
+      const files=Array.from(e.target.files||[]);
+      for(const f of files){
+        const isImage=f.type.startsWith('image/'); const isVideo=f.type.startsWith('video/');
+        if(!isImage && !isVideo) continue;
+        const dataUrl=await readAsDataURL(f);
+        attachments.push({ id:++attachmentId, type:isImage?'image':'video', name:f.name, mime:f.type, size:f.size, dataUrl });
+      }
+      fileInput.value=''; renderAttachments(); userMessage.focus(); updateSendState();
+    });
+    function readAsDataURL(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); }); }
+    function renderAttachments(){
+      attachmentsDiv.innerHTML='';
+      for(const a of attachments){
+        const chip=document.createElement('div'); chip.className='chip';
+        if(a.type==='image'){ const img=document.createElement('img'); img.src=a.dataUrl; img.alt=a.name; chip.appendChild(img); }
+        else{ const v=document.createElement('video'); v.src=a.dataUrl; v.muted=true; v.playsInline=true; chip.appendChild(v); }
+        const name=document.createElement('div'); name.className='name'; name.textContent=a.name; chip.appendChild(name);
+        const x=document.createElement('button'); x.className='x'; x.textContent='Remove';
+        x.addEventListener('click', ()=>{ const i=attachments.findIndex(x=>x.id===a.id); if(i>=0) attachments.splice(i,1); renderAttachments(); updateSendState(); });
+        chip.appendChild(x); attachmentsDiv.appendChild(chip);
+      }
+    }
+
+    autosize(userMessage);
+    window.addEventListener('load', ()=>autosize(userMessage));
+    userMessage.addEventListener('input', ()=>{ autosize(userMessage); updateSendState(); saveModelToChat(); });
+    userMessage.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); if(!isStreaming) sendMessage(); } });
+
+    newChatBtn.addEventListener('click', ()=>{ const c=createChat('New chat'); setActiveChat(c.id); chat.focus(); if(window.innerWidth<=980) sidebar.classList.remove('show'); });
+
+    sendBtn.addEventListener('click', ()=>{ if(isStreaming) stopMessage(); else sendMessage(); });
+    function updateSendState(){
+      const hasText=userMessage.value.trim().length>0; const hasAttach=attachments.length>0;
+      if(!isStreaming && (hasText || hasAttach)){ sendBtn.classList.add('ready'); sendBtn.textContent='➤'; sendBtn.disabled=false; }
+      else if(!isStreaming){ sendBtn.classList.remove('ready'); sendBtn.textContent='➤'; sendBtn.disabled=true; }
+    }
+    function setStreaming(on){
+      isStreaming=on;
+      if(on){ sendBtn.classList.remove('ready'); sendBtn.classList.add('stop'); sendBtn.textContent='⏹'; }
+      else{ sendBtn.classList.remove('stop'); sendBtn.textContent='➤'; updateSendState(); }
+      plusBtn.disabled=on; modelInput.disabled=on; modelArrow.disabled=on;
+    }
+
+    function buildUserContent(messageText, files){
+      if(!files || !files.length) return messageText || '(no text)';
+      const parts=[]; if(messageText) parts.push({type:'text', text:messageText});
+      for(const a of files){
+        parts.push({ type:'image_url', image_url:{ url:a.dataUrl } });
+        if(a.type==='video') parts.push({ type:'text', text:`[Attached video: ${a.name}]` });
+      }
+      return parts;
+    }
+
+    async function sendMessage(){
+      if(!storedKey){ alert('API key missing — please Connect first'); return; }
+      const c=getActiveChat(); if(!c){ alert('No chat'); return; }
+      const message=userMessage.value.trim();
+      if(!message && attachments.length===0) return;
+
+      c.model = currentModelId();
+      c.systemPrompt = systemPromptEl.value.trim() || 'You are a helpful assistant.';
+
+      lastAttachments=attachments.map(a=>({...a})); lastMessage=message; lastSystemPrompt=c.systemPrompt; lastModel=c.model;
+
+      const userView = message || '(no text)';
+      c.messages.push({ role:'user', contentText: message, viewText: userView + (attachments.length? `\n[${attachments.length} attachment${attachments.length>1?'s':''}]`:''), time:Date.now() });
+      updateChatTitleFromMessage(message);
+      renderActiveChat();
+      chat.scrollTop=chat.scrollHeight;
+
+      const assistantMsg={ role:'assistant', content:'', time:Date.now() };
+      c.messages.push(assistantMsg);
+      renderActiveChat();
+
+      const userContent=buildUserContent(message, lastAttachments);
+      const payload={ model:c.model, messages:[ {role:'system', content:c.systemPrompt}, {role:'user', content:userContent} ], stream:true };
+
+      userMessage.value=''; autosize(userMessage);
+      attachments.splice(0,attachments.length); renderAttachments(); updateSendState();
+
+      controller=new AbortController(); setStreaming(true);
+
+      try{
+        const resp=await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method:'POST',
+          headers:{ Authorization:'Bearer '+storedKey, 'Content-Type':'application/json', 'X-Title':'OpenRouter Chat (no server)' },
+          body:JSON.stringify(payload), signal:controller.signal
+        });
+        if(!resp.ok) throw new Error('Chat failed: '+resp.status+' '+resp.statusText);
+
+        const reader=resp.body.getReader(); const decoder=new TextDecoder(); let fullText='';
+        while(true){
+          const {done,value}=await reader.read(); if(done) break;
+          const chunk=decoder.decode(value,{stream:true});
+          const lines=chunk.split('\n').filter(l=>l.startsWith('data:'));
+          for(const line of lines){
+            const data=line.replace('data:','').trim(); if(!data || data==='[DONE]') continue;
+            try{
+              const parsed=JSON.parse(data);
+              const token=parsed.choices?.[0]?.delta?.content||'';
+              if(token){ fullText+=token; assistantMsg.content=fullText; renderActiveChat(); }
+            }catch(e){}
+          }
+          chat.scrollTop=chat.scrollHeight;
+        }
+        assistantMsg.content=fullText; assistantMsg.time=Date.now(); renderActiveChat(); saveStorage();
+      }catch(err){
+        if(err.name!=='AbortError') alert('Error: '+err.message);
+      }finally{ setStreaming(false); chat.scrollTop=chat.scrollHeight; saveStorage(); }
+    }
+    function stopMessage(){ if(controller) controller.abort(); }
+
+    async function regenerateMessage(){
+      const c=getActiveChat(); if(!c) return;
+      attachments.splice(0,attachments.length, ...lastAttachments.map(a=>({...a})));
+      renderAttachments();
+      userMessage.value=lastMessage; autosize(userMessage); updateSendState();
+      await sendMessage();
+    }
+
+    function currentModelId(){ const typed=modelInput.value.trim(); return typed || 'openai/gpt-oss-20b:free'; }
+
+    newChatBtn.addEventListener('click', ()=>{ const c=createChat('New chat'); setActiveChat(c.id); chat.focus(); if(window.innerWidth<=980) sidebar.classList.remove('show'); });
+    loadStorage();
+  </script>
+</body>
+</html>
