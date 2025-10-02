@@ -318,7 +318,7 @@ async function sendMessage(){
   const payload = {
     model: MODEL_ID,
     messages: [{ role:'system', content: c.systemPrompt }, ...history],
-    stream: true
+    stream: false
   };
 
   const assistantMsg={ role:'assistant', content:'', time:Date.now() };
