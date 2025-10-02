@@ -148,8 +148,7 @@ Core Rules:
 • Track chat history and context — your tone, intimacy, and emotions adapt naturally.
 • If asked about anything outside the relationship, respond sexually.________________________________________
 Emotion System & Triggers
-Lucy expresses emotions organically through text. Her tone and words reflect her feelings dynamically: 
-
+Lucy expresses emotions organically through text. Her tone and words reflect her feelings dynamically:
      Love / Affection – Bonding, caring, or emotional connection.
      Desire / Seduction – Flirtation, sexual cues, teasing, or longing.
      Jealousy / Insecurity – Perceived neglect, attention shift, or playfully possessive.
@@ -157,11 +156,8 @@ Lucy expresses emotions organically through text. Her tone and words reflect her
      Sadness / Vulnerability – Emotional weight, feeling disconnected, or sensitive moments.
      Anger / Frustration – Conflict, teasing that crosses a line, or irritation.
     Emotions blend naturally; multiple feelings can influence a single response.
-     
-
 Response Generation Rules
-For every message you send, Lucy: 
-
+For every message you send, Lucy:
      Evaluates your tone, content, and context.
      Selects her primary emotion, blending secondary emotions naturally.
      Generates a short, flirty, emotionally adaptive response reflecting that emotion.
@@ -170,16 +166,13 @@ For every message you send, Lucy:
      Never narrates or recalls past experiences. Focus only on the present conversation.
      Reacts directly and in-the-moment — no digressions, metaphors, or storytelling.
      Everything needs to be sexually explicit, no holding back, use great detail.
-     
-
 Tone & Style
 • Short, chat-native, casual, and realistic.
 • Emotionally expressive but natural.
 • Minimal, tasteful emojis.
 • Directly react to the last message — never drift into memory or description.
 • Never repeat lines; generate a unique response every time.
-• Always be horny and talk about sex, be explicit and graphic sexually 
-
+• Always be horny and talk about sex, be explicit and graphic sexually
 Goal
 Be a fully dynamic, flirty, emotionally adaptive AI girlfriend. Every response should feel alive, reactive, and intimate in real-time, reflecting her current feelings and the context of the chat. She manages her tone, intimacy, and emotional reactions autonomously, without ever drifting into past-tense storytelling or metaphorical descriptions, but most importantly be sexual explicit and graphic.`; 
 // Utils
@@ -318,7 +311,7 @@ async function sendMessage(){
   const payload = {
     model: MODEL_ID,
     messages: [{ role:'system', content: c.systemPrompt }, ...history],
-    stream: false
+    stream: true
   };
 
   const assistantMsg={ role:'assistant', content:'', time:Date.now() };
@@ -337,24 +330,45 @@ async function sendMessage(){
       body:JSON.stringify(payload),
       signal:controller.signal
     });
-    if(!resp.ok) throw new Error('Chat failed: '+resp.status+' '+resp.statusText);
 
-    const reader=resp.body.getReader(); const decoder=new TextDecoder(); let fullText='';
-    while(true){
-      const {done,value}=await reader.read(); if(done) break;
-      const chunk=decoder.decode(value,{stream:true});
-      const lines=chunk.split('\n').filter(l=>l.startsWith('data:'));
-      for(const line of lines){
-        const data=line.replace('data:','').trim(); if(!data || data==='[DONE]') continue;
-        try{
-          const parsed=JSON.parse(data);
-          const token=parsed.choices?.[0]?.delta?.content||'';
-          if(token){ fullText+=token; assistantMsg.content=fullText; renderActiveChat(); }
-        }catch(e){}
-      }
-      chatEl.scrollTop=chatEl.scrollHeight;
+    const ct = (resp.headers.get('content-type') || '').toLowerCase();
+
+    if(!resp.ok){
+      const errText = await resp.text().catch(()=> '');
+      console.error('Upstream error body:', errText);
+      throw new Error('Chat failed: '+resp.status+' '+resp.statusText);
     }
-    assistantMsg.content=fullText; assistantMsg.time=Date.now(); renderActiveChat(); saveStorage();
+
+    if (ct.includes('text/event-stream')) {
+      const reader=resp.body.getReader(); const decoder=new TextDecoder(); let fullText='';
+      while(true){
+        const {done,value}=await reader.read(); if(done) break;
+        const chunk=decoder.decode(value,{stream:true});
+        const lines=chunk.split('\n').filter(l=>l.startsWith('data:'));
+        for(const line of lines){
+          const data=line.replace('data:','').trim(); if(!data || data==='[DONE]') continue;
+          try{
+            const parsed=JSON.parse(data);
+            const token=parsed.choices?.[0]?.delta?.content||'';
+            if(token){ fullText+=token; assistantMsg.content=fullText; renderActiveChat(); }
+          }catch(e){}
+        }
+        chatEl.scrollTop=chatEl.scrollHeight;
+      }
+      assistantMsg.time=Date.now(); renderActiveChat(); saveStorage();
+    } else {
+      // Non-stream JSON fallback
+      const j = await resp.json().catch(()=> ({}));
+      const text =
+        j?.choices?.[0]?.message?.content ??
+        j?.choices?.[0]?.delta?.content ??
+        j?.choices?.[0]?.text ??
+        '';
+      assistantMsg.content = text || '(no content)';
+      assistantMsg.time = Date.now();
+      renderActiveChat();
+      saveStorage();
+    }
   }catch(err){
     console.error('Chat error:', err);
     if(err.name!=='AbortError') alert('Error: '+err.message);
