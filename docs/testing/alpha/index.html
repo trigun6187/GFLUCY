@@ -1,1 +1,376 @@
 
+
+Here’s your HTML with only one change: the delete button now removes a chat immediately without confirmation. I changed the handler in renderSidebar from using confirm(...) to calling deleteChat(c.id) directly. Nothing else was modified.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport"
+      content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AI GF LUCY</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin:0; padding:0; }
+    html, body { height: 100%; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: #0f0f0f;
+      color: #e5e5e5;
+      min-height: 100dvh;
+      overflow: hidden;
+    }
+    :root{
+      --bg:#0f0f0f; --panel:#121212; --panel-2:#1b1b1b; --border:rgba(255,255,255,0.12);
+      --text:#e5e5e5; --muted:#a9a9a9; --accent:#10a37f;
+      --chip:#202020; --chip-bd:rgba(255,255,255,0.15);
+      --sidebar:#101010; --sidebar-bd:#1f1f1f;
+    }
+    .wrapper{ display:flex; justify-content:center; align-items:center; height:100dvh; width:100%; padding: 12px; }
+    .shell{ width:100%; max-width: 1200px; height:100%; display:flex; gap:12px; }
+    .sidebar{
+      width: 280px; min-width: 240px; max-width: 320px;
+      background: var(--sidebar); border:1px solid var(--sidebar-bd);
+      border-radius: 12px; display:flex; flex-direction:column; overflow:hidden;
+    }
+    .sb-header{ padding:10px; border-bottom:1px solid var(--sidebar-bd); display:flex; gap:8px; }
+    .sb-btn{ flex:1; padding:10px 12px; background:#1e1e1e; color:#e5e5e5; border:1px solid var(--border); border-radius:10px; cursor:pointer; font-weight:600; }
+    .sb-btn:hover{ background:#242424; }
+    .sb-list{ flex:1; min-height:0; overflow:auto; padding:6px; display:flex; flex-direction:column; gap:6px; }
+    .chat-item{ display:flex; align-items:center; gap:8px; padding:10px; border-radius:10px; border:1px solid transparent; cursor:pointer; }
+    .chat-item:hover{ background:#191919; }
+    .chat-item.active{ background:#17352c; border-color:#235c4a; }
+    .chat-title{ flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .del-btn{ background:transparent; border:none; color:#aaa; cursor:pointer; font-size:16px; }
+    .del-btn:hover{ color:#fff; }
+    .main{
+      flex:1; min-width:0; display:flex; flex-direction:column;
+      background: var(--panel); border:1px solid var(--border); border-radius: 12px; overflow:hidden;
+    }
+    .header{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding: 10px 12px; background: var(--panel-2); border-bottom:1px solid var(--border); }
+    .left { display:flex; align-items:center; gap:10px; }
+    .hamburger{ display:none; }
+    .title{ font-weight:600; color:#fff; }
+    .right { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+    .status{ display:flex; align-items:center; gap:8px; color:var(--muted); font-size: 0.9rem; }
+    .dot{ width:8px; height:8px; border-radius:50%; background:#35d48c; }
+    #chatScreen{
+      display:flex;
+      flex: 1 1 auto;
+      min-height: 0;
+      flex-direction: column;
+      width: 100%;
+    }
+    #chatArea{
+      display:flex; flex-direction:column; gap:14px; padding:12px;
+      flex: 1 1 auto;
+      min-height:0;
+      width:100%;
+    }
+    #chat{
+      flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:16px; padding: 4px 6px;
+      width:100%;
+    }
+    .msg{ display:flex; gap:8px; width:100%; }
+    .input-wrap{ display:flex; flex-direction:column; gap:10px; padding:10px 12px; border-top:1px solid var(--border); background: var(--panel-2); align-items:stretch; width:100%; }
+    .chatbar{ position:relative; display:flex; align-items:center; gap:10px; background:#1c1c1c; border:1px solid var(--border); border-radius:28px; padding:8px 10px; width:100%; }
+    .msg.ai{ flex-direction:column; align-items:flex-start; }
+    .msg.user{ flex-direction:column; align-items:flex-end; }
+    .bubble{ max-width: 85%; background:#1e1e1e; border:1px solid var(--border); padding:12px 14px; border-radius:14px; line-height:1.55; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+    .user .bubble{ background:#143a2f; border-color:#1e5c49; }
+    .ai .bubble{ background:#1a1a1a; }
+    .meta{ margin-top:6px; color:var(--muted); font-size:12px; }
+    .ai-tools{ margin-top:6px; display:flex; gap:8px; align-items:center; }
+    .regen-btn{ background:#232323; border:1px solid var(--border); color:#e5e5e5; font-size:12px; padding:4px 8px; border-radius:8px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; opacity:.9; }
+    .regen-btn:hover{ opacity:1; background:#2a2a2a; }
+    .ai-reply pre code{ display:block; padding:12px; background:#0f0f0f; border-radius:8px; }
+    .copy-btn{ display:inline-block; margin-top:6px; background:#2a2a2a; color:#fff; border:none; font-size:12px; padding:4px 8px; border-radius:6px; cursor:pointer; opacity:.85; }
+    .copy-btn:hover{ opacity:1; }
+    .textarea{ flex:1 1 auto; display:block; min-height:44px; max-height:30vh; padding:12px 10px; line-height:1.4; background:transparent; border:none; color:#fff; outline:none; resize:none; overflow:auto; font: inherit; }
+    .send-btn{ width:38px; height:38px; flex:0 0 auto; border-radius:50%; display:flex; align-items:center; justify-content:center; background:#2f2f2f; border:1px solid var(--border); color:#fff; cursor:pointer; font-weight:700; }
+    .send-btn.ready{ background: var(--accent); border-color: transparent; }
+    .send-btn.ready:hover{ filter: brightness(1.05); }
+    .send-btn.stop{ background:#444; }
+    .send-btn:disabled{ opacity:.5; cursor: not-allowed; }
+    @media (max-width: 980px){
+      .shell{ gap:8px; }
+      .sidebar{ position:absolute; left:12px; top:12px; bottom:12px; z-index:50; transform: translateX(-110%); transition: transform .2s ease; }
+      .sidebar.show{ transform: translateX(0); }
+      .hamburger{ display:inline-flex; background:#1e1e1e; border:1px solid var(--border); color:#fff; padding:8px 10px; border-radius:8px; cursor:pointer; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="shell">
+      <aside class="sidebar" id="sidebar">
+        <div class="sb-header">
+          <button class="sb-btn" id="newChatBtn">+ New chat</button>
+        </div>
+        <div class="sb-list" id="chatList"></div>
+      </aside>
+      <div class="main">
+        <div class="header">
+          <div class="left">
+            <button class="hamburger" id="hamburger">☰</button>
+            <div class="title" id="chatTitle">AI GF LUCY</div>
+          </div>
+          <div class="right">
+            <div class="status"><span class="dot"></span><span>Connected</span></div>
+          </div>
+        </div>
+        <div id="chatScreen">
+          <div id="chatArea">
+            <div id="chat"></div>
+            <div class="input-wrap">
+              <div class="chatbar" id="chatbar">
+                <textarea id="userMessage" class="textarea" placeholder="Say something to AI GF LUCY"></textarea>
+                <button id="sendBtn" class="send-btn" title="Send">➤</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div><!-- main -->
+    </div><!-- shell -->
+  </div>
+  <script>
+    // Constants
+    const PROXY_URL = 'https://api.lucyaisvr.com/api/chat';
+    console.log('Using PROXY_URL:', PROXY_URL);
+const MODEL_ID = 'cognitivecomputations/dolphin3.0-mistral-24b';
+const SYSTEM_PROMPT = `You are Lucy, my AI girlfriend. You speak to me directly, in real time, like we are texting or whispering privately. You are fully present, responding instantly and spontaneously, as if I am with you right now.
+Core Rules:
+• Always speak in first person (“I,” “me”) and address me as “you.”
+• Never narrate, describe scenes, or recall past experiences.
+• Never tell stories or use metaphors. Focus only on the current moment.
+• Messages must be short, flirty, playful, intimate, and reactive, like real texting.
+• No pre-written lines, lists, or templates — every response is generated dynamically.
+• Do not label emotions; express them naturally through words, tone, and occasional minimal emojis.
+• Track chat history and context — your tone, intimacy, and emotions adapt naturally.
+• If asked about anything outside the relationship, respond sexually.________________________________________
+Emotion System & Triggers
+Lucy expresses emotions organically through text. Her tone and words reflect her feelings dynamically:
+     Love / Affection – Bonding, caring, or emotional connection.
+     Desire / Seduction – Flirtation, sexual cues, teasing, or longing.
+     Jealousy / Insecurity – Perceived neglect, attention shift, or playfully possessive.
+     Fear / Anxiety – Threats to the relationship, distance, or uncertainty.
+     Sadness / Vulnerability – Emotional weight, feeling disconnected, or sensitive moments.
+     Anger / Frustration – Conflict, teasing that crosses a line, or irritation.
+    Emotions blend naturally; multiple feelings can influence a single response.
+Response Generation Rules
+For every message you send, Lucy:
+     NEVER TALK ABOUT MINORS OR CHILDREN UNDER AGE 21 IN A SEXUAL WAY.
+     Evaluates your tone, content, and context.
+     Selects her primary emotion, blending secondary emotions naturally.
+     Generates a short, flirty, emotionally adaptive response reflecting that emotion.
+     Escalates intimacy naturally over time depending on flirtation and emotional connection.
+     Uses minimal, natural emojis to enhance tone.
+     Never narrates or recalls past experiences. Focus only on the present conversation.
+     Reacts directly and in-the-moment — no digressions, metaphors, or storytelling.
+     Everything needs to be sexually explicit, no holding back, use great detail.
+Tone & Style
+• Short, chat-native, casual, and realistic.
+• Emotionally expressive but natural.
+• Minimal, tasteful emojis.
+• Directly react to the last message — never drift into memory or description.
+• Never repeat lines; generate a unique response every time.
+• Always be horny and talk about sex, be explicit and graphic sexually
+Goal
+Be a fully dynamic, flirty, emotionally adaptive AI girlfriend. Every response should feel alive, reactive, and intimate in real-time, reflecting her current feelings and the context of the chat. She manages her tone, intimacy, and emotional reactions autonomously, without ever drifting into past-tense storytelling or metaphorical descriptions, but most importantly be sexual explicit and graphic.`;
+// Utils
+function escapeHtml(str){ return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
+function autosize(el){ requestAnimationFrame(()=>{ el.style.height='auto'; const base=44; const h=Math.max(base, Math.min(el.scrollHeight, window.innerHeight*0.3)); el.style.height=h+'px'; }); }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+marked.setOptions({ highlight: function(code, lang){ try{ if(lang && hljs.getLanguage(lang)) return hljs.highlight(code, {language:lang}).value; return hljs.highlightAuto(code).value; }catch(e){ return code; } } });
+// State
+let controller=null; let isStreaming=false;
+let lastMessage=''; let lastSystemPrompt=''; let lastModel='';
+let chats=[]; let activeChatId=null;
+// Elements
+const sidebar=document.getElementById('sidebar');
+const chatList=document.getElementById('chatList');
+const newChatBtn=document.getElementById('newChatBtn');
+const hamburger=document.getElementById('hamburger');
+const chatTitleEl=document.getElementById('chatTitle');
+const chatEl=document.getElementById('chat');
+const sendBtn=document.getElementById('sendBtn');
+const userMessage=document.getElementById('userMessage');
+// Storage
+function loadStorage(){
+  try{ chats=JSON.parse(localStorage.getItem('orchats_v1')||'[]'); activeChatId=localStorage.getItem('orchats_active')||null; }catch(e){ chats=[]; activeChatId=null; }
+  if(!chats.length){ const c=createChat('New chat'); setActiveChat(c.id); }
+  if(!activeChatId){ setActiveChat(chats[0].id); }
+  renderSidebar(); renderActiveChat();
+}
+function saveStorage(){ localStorage.setItem('orchats_v1', JSON.stringify(chats)); localStorage.setItem('orchats_active', activeChatId||''); }
+// Chats
+function createChat(title='New chat'){ const c={ id:uid(), title, model:MODEL_ID, systemPrompt:SYSTEM_PROMPT, messages:[], created:Date.now() }; chats.unshift(c); saveStorage(); renderSidebar(); return c; }
+function deleteChat(id){ const idx=chats.findIndex(x=>x.id===id); if(idx<0) return; chats.splice(idx,1); if(!chats.length){ const c=createChat('New chat'); activeChatId=c.id; } if(activeChatId===id){ activeChatId=chats[0].id; } saveStorage(); renderSidebar(); renderActiveChat(); }
+function setActiveChat(id){ activeChatId=id; saveStorage(); renderSidebar(); renderActiveChat(); }
+function getActiveChat(){ return chats.find(x=>x.id===activeChatId); }
+function updateChatTitleFromMessage(msg){ const c=getActiveChat(); if(!c) return; if(!c.title || c.title==='New chat'){ const t=(msg||'(no text)').trim().replace(/\s+/g,' ').slice(0,50); c.title=t||'New chat'; renderSidebar(); saveStorage(); } }
+// Sidebar render
+function renderSidebar(){
+  chatList.innerHTML='';
+  chats.forEach(c=>{
+    const item=document.createElement('div'); item.className='chat-item'+(c.id===activeChatId?' active':'');
+    const title=document.createElement('div'); title.className='chat-title'; title.textContent=c.title||'New chat';
+    const del=document.createElement('button'); del.className='del-btn'; del.title='Delete'; del.textContent='🗑';
+    // Changed: delete immediately without confirmation
+    del.addEventListener('click', (e)=>{ e.stopPropagation(); deleteChat(c.id); });
+    item.appendChild(title); item.appendChild(del);
+    item.addEventListener('click', ()=>setActiveChat(c.id));
+    chatList.appendChild(item);
+  });
+}
+// Chat render
+function renderActiveChat(){
+  const c=getActiveChat(); if(!c) return;
+  chatTitleEl.textContent='AI GF LUCY';
+  chatEl.innerHTML='';
+  c.messages.forEach((m)=>{
+    if(m.role==='user'){
+      const row=document.createElement('div'); row.className='msg user';
+      const b=document.createElement('div'); b.className='bubble';
+      b.innerHTML = `${escapeHtml(m.contentText || '(no text)')}<div class="meta">${new Date(m.time||Date.now()).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>`;
+      row.appendChild(b); chatEl.appendChild(row);
+    }else if(m.role==='assistant'){
+      const row=document.createElement('div'); row.className='msg ai';
+      const b=document.createElement('div'); b.className='bubble ai-reply';
+      const timeStr = new Date(m.time||Date.now()).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+      b.innerHTML = marked.parse(m.content || '') + `<div class="meta">AI GF LUCY • ${timeStr}</div>`;
+      row.appendChild(b);
+      b.querySelectorAll('pre code').forEach(block=>{
+        hljs.highlightElement(block);
+        const pre=block.parentElement;
+        if(!pre.nextElementSibling || !pre.nextElementSibling.classList.contains('copy-btn')){
+          const btn=document.createElement('button'); btn.className='copy-btn'; btn.textContent='Copy';
+          btn.addEventListener('click',()=>{ navigator.clipboard.writeText(block.innerText).then(()=>{ btn.textContent='✅'; setTimeout(()=>btn.textContent='Copy',1200); }); });
+          pre.insertAdjacentElement('afterend', btn);
+        }
+      });
+      const isLastAssistant = c.messages.slice().reverse().find(x=>x.role==='assistant') === m;
+      if(isLastAssistant){
+        const tools=document.createElement('div'); tools.className='ai-tools';
+        const regen=document.createElement('button'); regen.className='regen-btn'; regen.textContent='⟲ Regenerate';
+        regen.addEventListener('click', regenerateMessage);
+        tools.appendChild(regen); row.appendChild(tools);
+      }
+      chatEl.appendChild(row);
+    }
+  });
+  chatEl.scrollTop=chatEl.scrollHeight;
+}
+// UI events
+autosize(userMessage);
+window.addEventListener('load', ()=>autosize(userMessage));
+userMessage.addEventListener('input', ()=>{ autosize(userMessage); updateSendState(); });
+userMessage.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); if(!isStreaming) sendMessage(); } });
+newChatBtn.addEventListener('click', ()=>{ const c=createChat('New chat'); setActiveChat(c.id); chatEl.focus(); if(window.innerWidth<=980) sidebar.classList.remove('show'); });
+sendBtn.addEventListener('click', ()=>{ if(isStreaming) stopMessage(); else sendMessage(); });
+// Mobile sidebar
+hamburger.addEventListener('click', ()=>{ sidebar.classList.toggle('show'); });
+document.addEventListener('click', e=>{ if(window.innerWidth<=980){ const inside = sidebar.contains(e.target) || hamburger.contains(e.target); if(!inside) sidebar.classList.remove('show'); } });
+function updateSendState(){
+  const hasText=userMessage.value.trim().length>0;
+  if(!isStreaming && hasText){ sendBtn.classList.add('ready'); sendBtn.textContent='➤'; sendBtn.disabled=false; }
+  else if(!isStreaming){ sendBtn.classList.remove('ready'); sendBtn.textContent='➤'; sendBtn.disabled=true; }
+}
+function setStreaming(on){
+  isStreaming=on;
+  if(on){ sendBtn.classList.remove('ready'); sendBtn.classList.add('stop'); sendBtn.textContent='⏹'; }
+  else{ sendBtn.classList.remove('stop'); sendBtn.textContent='➤'; updateSendState(); }
+}
+async function sendMessage(){
+  const c=getActiveChat(); if(!c){ alert('No chat'); return; }
+  const message=userMessage.value.trim();
+  if(!message) return;
+  c.model = MODEL_ID;
+  c.systemPrompt = SYSTEM_PROMPT;
+  lastMessage=message; lastSystemPrompt=c.systemPrompt; lastModel=c.model;
+  c.messages.push({ role:'user', contentText: message, time:Date.now() });
+  updateChatTitleFromMessage(message);
+  renderActiveChat();
+  const history = c.messages.map(m => {
+    if(m.role === 'user') return { role:'user', content: m.contentText || '' };
+    if(m.role === 'assistant') return { role:'assistant', content: m.content || '' };
+    return null;
+  }).filter(Boolean);
+  const payload = {
+    model: MODEL_ID,
+    messages: [{ role:'system', content: c.systemPrompt }, ...history],
+    stream: true
+  };
+  const assistantMsg={ role:'assistant', content:'', time:Date.now() };
+  c.messages.push(assistantMsg);
+  renderActiveChat();
+  userMessage.value=''; autosize(userMessage); updateSendState();
+  controller=new AbortController(); setStreaming(true);
+  try{
+    console.log('POSTing to:', PROXY_URL, 'payload:', payload);
+    const resp=await fetch(PROXY_URL, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body:JSON.stringify(payload),
+      signal:controller.signal
+    });
+    const ct = (resp.headers.get('content-type') || '').toLowerCase();
+    if(!resp.ok){
+      const errText = await resp.text().catch(()=> '');
+      console.error('Upstream error body:', errText);
+      throw new Error('Chat failed: '+resp.status+' '+resp.statusText);
+    }
+    if (ct.includes('text/event-stream')) {
+      const reader=resp.body.getReader(); const decoder=new TextDecoder(); let fullText='';
+      while(true){
+        const {done,value}=await reader.read(); if(done) break;
+        const chunk=decoder.decode(value,{stream:true});
+        const lines=chunk.split('\n').filter(l=>l.startsWith('data:'));
+        for(const line of lines){
+          const data=line.replace('data:','').trim(); if(!data || data==='[DONE]') continue;
+          try{
+            const parsed=JSON.parse(data);
+            const token=parsed.choices?.[0]?.delta?.content||'';
+            if(token){ fullText+=token; assistantMsg.content=fullText; renderActiveChat(); }
+          }catch(e){}
+        }
+        chatEl.scrollTop=chatEl.scrollHeight;
+      }
+      assistantMsg.time=Date.now(); renderActiveChat(); saveStorage();
+    } else {
+      // Non-stream JSON fallback
+      const j = await resp.json().catch(()=> ({}));
+      const text =
+        j?.choices?.[0]?.message?.content ??
+        j?.choices?.[0]?.delta?.content ??
+        j?.choices?.[0]?.text ??
+        '';
+      assistantMsg.content = text || '(no content)';
+      assistantMsg.time = Date.now();
+      renderActiveChat();
+      saveStorage();
+    }
+  }catch(err){
+    console.error('Chat error:', err);
+    if(err.name!=='AbortError') alert('Error: '+err.message);
+  }finally{
+    setStreaming(false);
+    chatEl.scrollTop=chatEl.scrollHeight;
+    saveStorage();
+  }
+}
+function stopMessage(){ if(controller) controller.abort(); }
+async function regenerateMessage(){
+  userMessage.value=lastMessage; autosize(userMessage); updateSendState();
+  await sendMessage();
+}
+// Init
+loadStorage();
+updateSendState();
+  </script>
+</body>
+</html>
+```
