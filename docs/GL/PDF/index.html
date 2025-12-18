@@ -2,9 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Video Shrinker v1.4</title>
-    
-    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+    <title>Video Shrinker v2.0 (Threaded)</title>
     
     <style>
         body { font-family: sans-serif; padding: 50px; text-align: center; }
@@ -16,10 +14,9 @@
         .stats { margin-top: 15px; color: #555; font-size: 16px; }
         .stat-box { display: inline-block; margin: 0 15px; }
         
-        /* New style to make the result green and bold when finished */
         .result-success { color: #28a745; font-weight: bold; }
 
-        /* --- PATCH NOTES MODAL --- */
+        /* --- MODAL --- */
         #modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000;
@@ -38,10 +35,11 @@
 
     <div id="modal-overlay">
         <div id="modal-box">
-            <h3>Patch Notes v1.4</h3>
+            <h3>Patch Notes v2.0</h3>
             <ul>
-                <li><strong>New:</strong> "Savings" calculator (shows % saved).</li>
-                <li><strong>Update:</strong> Result size turns green when ready.</li>
+                <li><strong>Major Update:</strong> Added "Web Worker" support.</li>
+                <li><strong>Fix:</strong> Solved "Browser slowing down" warnings.</li>
+                <li><strong>Fix:</strong> UI no longer freezes during conversion.</li>
             </ul>
             <button class="close-btn" onclick="document.getElementById('modal-overlay').style.display='none'">Got it!</button>
         </div>
@@ -77,14 +75,54 @@
 
     <div id="l" style="margin-top:20px;font-family:monospace;"></div>
 
-<script>
-    const { createFFmpeg, fetchFile } = FFmpeg;
+    <script id="worker-code" type="javascript/worker">
+        // Import FFmpeg inside the worker
+        importScripts('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js');
 
-    const ffmpeg = createFFmpeg({ 
-        log: true,
-        mainName: 'main', 
-        corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
-    });
+        const { createFFmpeg } = FFmpeg;
+        
+        // Setup FFmpeg
+        const ffmpeg = createFFmpeg({
+            log: true,
+            mainName: 'main', 
+            corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
+        });
+
+        self.onmessage = async function(e) {
+            const { fileData, resolution, fileName } = e.data;
+
+            try {
+                if (!ffmpeg.isLoaded()) await ffmpeg.load();
+
+                // Report progress back to main thread
+                ffmpeg.setProgress(({ ratio }) => {
+                    self.postMessage({ type: 'progress', ratio });
+                });
+
+                // Write file to memory
+                ffmpeg.FS('writeFile', fileName, new Uint8Array(fileData));
+
+                // Run FFmpeg
+                await ffmpeg.run('-i', fileName, '-vf', `scale=-2:${resolution}`, '-c:v', 'libx264', '-preset', 'ultrafast', 'out.mp4');
+
+                // Read result
+                const data = ffmpeg.FS('readFile', 'out.mp4');
+                
+                // Send file back
+                self.postMessage({ type: 'done', data: data.buffer }, [data.buffer]);
+
+                // Cleanup
+                ffmpeg.FS('unlink', fileName);
+                ffmpeg.FS('unlink', 'out.mp4');
+
+            } catch (err) {
+                self.postMessage({ type: 'error', message: err.message });
+            }
+        };
+    </script>
+
+<script>
+    // --- MAIN THREAD SCRIPT ---
 
     const u = document.getElementById('u');
     const res = document.getElementById('res');
@@ -95,7 +133,32 @@
     const pText = document.getElementById('t');
     const sizeIn = document.getElementById('size-in');
     const sizeOut = document.getElementById('size-out');
+    
+    let worker = null;
 
+    // Helper: Create Worker from the script tag above
+    function initWorker() {
+        const blob = new Blob([document.getElementById('worker-code').textContent], { type: "text/javascript" });
+        worker = new Worker(URL.createObjectURL(blob));
+
+        worker.onmessage = function(e) {
+            const msg = e.data;
+            if (msg.type === 'progress') {
+                if (msg.ratio > 0 && msg.ratio <= 1) {
+                    const percent = (msg.ratio * 100).toFixed(0);
+                    pBar.value = percent;
+                    pText.innerText = `${percent}%`;
+                }
+            } else if (msg.type === 'done') {
+                handleDone(msg.data);
+            } else if (msg.type === 'error') {
+                l.innerText = "Error: " + msg.message;
+                b.disabled = false;
+            }
+        };
+    }
+
+    // Helper: Format Bytes
     const formatBytes = (bytes) => {
         if(bytes === 0) return '0 Bytes';
         const k = 1024;
@@ -104,62 +167,54 @@
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     };
 
-    ffmpeg.setProgress(({ ratio }) => {
-        if (ratio > 0 && ratio <= 1) {
-            const percent = (ratio * 100).toFixed(0);
-            pBar.value = percent;
-            pText.innerText = `${percent}%`;
-        }
-    });
-
-    (async()=>{
-        try {
-            await ffmpeg.load();
-            b.disabled = false;
-        } catch(e) { l.innerText = "Error: " + e.message; }
-    })();
-
     u.onchange = () => {
         b.disabled = false;
         if(u.files[0]) {
             sizeIn.innerText = formatBytes(u.files[0].size);
             sizeOut.innerText = "-";
-            sizeOut.className = ""; // Reset color
+            sizeOut.className = "";
         }
     };
 
+    function handleDone(arrayBuffer) {
+        const originalSize = u.files[0].size;
+        const newSize = arrayBuffer.byteLength;
+        const savings = ((originalSize - newSize) / originalSize) * 100;
+        const savingsText = savings > 0 ? `(-${savings.toFixed(0)}%)` : `(+${Math.abs(savings).toFixed(0)}%)`;
+
+        sizeOut.innerText = `${formatBytes(newSize)} ${savingsText}`;
+        sizeOut.className = "result-success";
+
+        const url = URL.createObjectURL(new Blob([arrayBuffer], {type:'video/mp4'}));
+        pBar.value = 100; pText.innerText = "100%";
+        l.innerHTML = `<a href="${url}" download="video_${res.value}p.mp4">Download Video</a>`;
+        b.disabled = false;
+    }
+
     b.onclick = async () => {
         if(!u.files[0]) return;
-        b.disabled = true; l.innerText = "Processing...";
+        b.disabled = true; l.innerText = "Processing in background...";
         
+        // Reset Progress
         pContainer.style.display = 'block';
         pBar.value = 0;
         pText.innerText = "0%";
-        
-        try {
-            const resolution = res.value;
-            const originalSize = u.files[0].size;
 
-            ffmpeg.FS('writeFile', 'in', await fetchFile(u.files[0]));
-            await ffmpeg.run('-i','in','-vf',`scale=-2:${resolution}`,'-c:v','libx264','-preset','ultrafast','out.mp4');
-            
-            const data = ffmpeg.FS('readFile','out.mp4');
-            const newSize = data.byteLength;
-            
-            // Calculate savings
-            const savings = ((originalSize - newSize) / originalSize) * 100;
-            const savingsText = savings > 0 ? `(-${savings.toFixed(0)}%)` : `(+${Math.abs(savings).toFixed(0)}%)`;
+        // Initialize (or re-initialize) worker
+        if (worker) worker.terminate(); // Kill old worker to clear memory
+        initWorker();
 
-            // Display Result with Green Color
-            sizeOut.innerText = `${formatBytes(newSize)} ${savingsText}`;
-            sizeOut.className = "result-success";
-
-            const url = URL.createObjectURL(new Blob([data.buffer], {type:'video/mp4'}));
-            pBar.value = 100; pText.innerText = "100%";
-            l.innerHTML = `<a href="${url}" download="video_${resolution}p.mp4">Download Video</a>`;
-        } catch(e) {
-            l.innerText = e.message;
-        }
+        // Read file as ArrayBuffer to send to Worker
+        const reader = new FileReader();
+        reader.onload = () => {
+            // Send data to worker
+            worker.postMessage({
+                fileData: reader.result,
+                resolution: res.value,
+                fileName: u.files[0].name
+            }, [reader.result]); // Transferable for speed
+        };
+        reader.readAsArrayBuffer(u.files[0]);
     };
 </script>
 </body>
