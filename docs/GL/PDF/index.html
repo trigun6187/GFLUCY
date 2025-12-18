@@ -2,171 +2,91 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Shrinker</title>
-    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+    <title>Video Shrinker (with Progress)</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.10.1/dist/ffmpeg.min.js?v=999"></script>
+    
     <style>
-        :root { --primary: #2563eb; --bg: #f8fafc; --surface: #ffffff; }
-        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
-        
-        .card { background: var(--surface); padding: 40px; border-radius: 20px; box-shadow: 0 10px 40px -5px rgba(0,0,0,0.1); width: 100%; max-width: 440px; text-align: center; }
-        h2 { margin-top: 0; color: #1e293b; }
-        
-        .upload-area { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 30px; background: #f1f5f9; cursor: pointer; position: relative; margin-bottom: 20px; transition: 0.2s; }
-        .upload-area:hover { border-color: var(--primary); background: #eff6ff; }
-        .upload-area input { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
-        
-        select { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 16px; margin-bottom: 20px; }
-        
-        button { width: 100%; padding: 16px; background: var(--primary); color: white; border: none; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; transition: 0.2s; }
-        button:disabled { background: #94a3b8; cursor: not-allowed; }
-        
-        /* PROGRESS BAR STYLES */
-        .progress-container {
-            width: 100%; background-color: #e2e8f0; border-radius: 8px; margin-top: 25px;
-            height: 10px; overflow: hidden; display: none; /* Hidden by default */
-        }
-        .progress-fill {
-            height: 100%; background-color: #10b981; width: 0%;
-            transition: width 0.3s ease; border-radius: 8px;
-        }
-        #status-text { margin-top: 10px; font-size: 13px; color: #64748b; font-family: monospace; min-height: 20px; }
-
-        .download-btn { display: block; margin-top: 20px; background: #10b981; color: white; padding: 15px; border-radius: 10px; text-decoration: none; font-weight: bold; }
+        body { font-family: sans-serif; padding: 50px; text-align: center; }
+        /* Style for the progress bar */
+        #progress-container { display: none; margin-top: 20px; }
+        progress { width: 300px; height: 20px; }
     </style>
 </head>
 <body>
-
-<div class="card">
     <h2>Video Shrinker</h2>
+    <input type="file" id="u" accept="video/*"><br><br>
+    <button id="b" disabled>Convert</button>
     
-    <div class="upload-area" id="drop-zone">
-        <span style="font-size: 40px">📂</span><br>
-        <span id="file-label" style="font-weight:600; color:#475569">Click to upload video</span>
-        <input type="file" id="uploader" accept="video/*">
+    <div id="progress-container">
+        <progress id="p" value="0" max="100"></progress>
+        <br>
+        <span id="t">0%</span>
     </div>
 
-    <select id="resolution">
-        <option value="720">720p (HD)</option>
-        <option value="540" selected>540p (Mobile)</option>
-        <option value="480">480p (SD)</option>
-    </select>
-
-    <button id="convert-btn" disabled>Loading Engine...</button>
-    
-    <div class="progress-container" id="progress-container">
-        <div class="progress-fill" id="progress-fill"></div>
-    </div>
-    <div id="status-text"></div>
-    
-    <div id="result"></div>
-</div>
+    <div id="l" style="margin-top:20px;font-family:monospace;"></div>
 
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
 
-    // Use Single-Threaded Core from JSDelivr
-    // Added ?v=2 to force browser to ignore old cached versions
     const ffmpeg = createFFmpeg({ 
         log: true,
-        corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js?v=2'
+        corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js?v=999'
     });
 
-    const uploader = document.getElementById('uploader');
-    const convertBtn = document.getElementById('convert-btn');
-    const progressContainer = document.getElementById('progress-container');
-    const progressFill = document.getElementById('progress-fill');
-    const statusText = document.getElementById('status-text');
-    const resultEl = document.getElementById('result');
-    const fileLabel = document.getElementById('file-label');
-    const dropZone = document.getElementById('drop-zone');
+    const u = document.getElementById('u');
+    const b = document.getElementById('b');
+    const l = document.getElementById('l');
+    const pContainer = document.getElementById('progress-container');
+    const pBar = document.getElementById('p');
+    const pText = document.getElementById('t');
 
-    let totalDuration = 0;
+    // --- NEW: Handle Progress ---
+    ffmpeg.setProgress(({ ratio }) => {
+        // Ratio comes in as 0 to 1 (e.g. 0.5 is 50%)
+        const percent = (ratio * 100).toFixed(0);
+        
+        // Update DOM
+        pBar.value = percent;
+        pText.innerText = `${percent}%`;
+    });
 
-    (async () => {
+    (async()=>{
         try {
             await ffmpeg.load();
-            convertBtn.textContent = "Convert Video";
-            convertBtn.disabled = true;
-        } catch(e) {
-            statusText.textContent = "Engine Error: " + e.message;
-        }
+            b.disabled = false;
+        } catch(e) { l.innerText = "Error: " + e.message; }
     })();
 
-    uploader.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            fileLabel.textContent = file.name;
-            dropZone.style.background = "#dbeafe";
-            dropZone.style.borderColor = "#2563eb";
-            convertBtn.disabled = false;
-            
-            // Get Video Duration for Progress Calculation
-            const video = document.createElement('video');
-            video.preload = 'metadata';
-            video.onloadedmetadata = function() {
-                window.URL.revokeObjectURL(video.src);
-                totalDuration = video.duration;
-            }
-            video.src = URL.createObjectURL(file);
-        }
-    });
+    u.onchange = () => b.disabled = false;
 
-    convertBtn.addEventListener('click', async () => {
-        convertBtn.disabled = true;
-        convertBtn.textContent = "Processing...";
-        progressContainer.style.display = 'block';
-        statusText.textContent = "Initializing...";
-
-        const res = document.getElementById('resolution').value;
-
-        // Custom Logger to update Progress Bar
-        ffmpeg.setLogger(({ message }) => {
-            // Check if log contains time info (e.g. time=00:00:15.30)
-            if (message.includes('time=')) {
-                const timeMatch = message.match(/time=(\d{2}):(\d{2}):(\d{2}\.\d{2})/);
-                if (timeMatch && totalDuration > 0) {
-                    const hours = parseFloat(timeMatch[1]);
-                    const minutes = parseFloat(timeMatch[2]);
-                    const seconds = parseFloat(timeMatch[3]);
-                    const currentTime = (hours * 3600) + (minutes * 60) + seconds;
-                    
-                    const percent = Math.min((currentTime / totalDuration) * 100, 100);
-                    progressFill.style.width = `${percent.toFixed(1)}%`;
-                    statusText.textContent = `Progress: ${percent.toFixed(0)}%`;
-                }
-            }
-        });
-
+    b.onclick = async () => {
+        if(!u.files[0]) return;
+        
+        b.disabled = true; 
+        l.innerText = "Processing...";
+        
+        // Show and reset progress bar
+        pContainer.style.display = 'block';
+        pBar.value = 0;
+        pText.innerText = "0%";
+        
         try {
-            ffmpeg.FS('writeFile', 'input', await fetchFile(uploader.files[0]));
+            ffmpeg.FS('writeFile', 'in', await fetchFile(u.files[0]));
             
-            await ffmpeg.run(
-                '-i', 'input', 
-                '-vf', `scale=-2:${res}`, 
-                '-c:v', 'libx264', 
-                '-preset', 'ultrafast', 
-                '-crf', '28', 
-                'output.mp4'
-            );
+            await ffmpeg.run('-i','in','-vf','scale=-2:540','-c:v','libx264','-preset','ultrafast','out.mp4');
             
-            const data = ffmpeg.FS('readFile', 'output.mp4');
-            const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' }));
+            const data = ffmpeg.FS('readFile','out.mp4');
+            const url = URL.createObjectURL(new Blob([data.buffer], {type:'video/mp4'}));
             
-            // Finish Progress Bar
-            progressFill.style.width = '100%';
-            statusText.textContent = 'Done!';
-            
-            resultEl.innerHTML = `<a class="download-btn" href="${url}" download="shrunk_${res}p.mp4">⬇️ Download Result</a>`;
-            convertBtn.textContent = "Success";
-            convertBtn.disabled = false;
-            
-            try { ffmpeg.FS('unlink', 'input'); ffmpeg.FS('unlink', 'output.mp4'); } catch(e){}
-
-        } catch (error) {
-            statusText.textContent = "Error: " + error.message;
-            convertBtn.textContent = "Failed";
-            convertBtn.disabled = false;
+            // Set progress to 100% visually just in case it stopped at 99%
+            pBar.value = 100;
+            pText.innerText = "100%";
+            l.innerHTML = `<a href="${url}" download="video.mp4">Download Video</a>`;
+        } catch(e) {
+            l.innerText = e.message;
         }
-    });
-</
+    };
+</script>
+</body>
+</html>
