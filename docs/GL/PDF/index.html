@@ -2,65 +2,71 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Video Shrinker v1.2.2</title>
+    <title>Video Shrinker v1.4</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
     
     <style>
         body { font-family: sans-serif; padding: 50px; text-align: center; }
+        select, button { padding: 10px; font-size: 16px; margin: 5px; }
         
-        /* Progress Bar Styles */
         #progress-container { display: none; margin-top: 20px; }
         progress { width: 300px; height: 20px; }
 
-        /* --- PATCH NOTES MODAL STYLES --- */
-        #modal-overlay {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: rgba(0,0,0,0.6);
-            display: flex;
-            align-items: center; justify-content: center;
-            z-index: 1000;
-        }
-
-        #modal-box {
-            background: white;
-            padding: 25px;
-            width: 90%; max-width: 400px;
-            border-radius: 8px; text-align: left;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-        }
-
-        #modal-box h3 { margin-top: 0; color: #333; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-        #modal-box ul { padding-left: 20px; color: #555; }
-        #modal-box li { margin-bottom: 8px; }
+        .stats { margin-top: 15px; color: #555; font-size: 16px; }
+        .stat-box { display: inline-block; margin: 0 15px; }
         
-        .close-btn {
-            background: #007bff; color: white;
-            border: none; padding: 10px 20px;
-            border-radius: 4px; cursor: pointer;
-            float: right; margin-top: 10px;
+        /* New style to make the result green and bold when finished */
+        .result-success { color: #28a745; font-weight: bold; }
+
+        /* --- PATCH NOTES MODAL --- */
+        #modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000;
         }
-        .close-btn:hover { background: #0056b3; }
+        #modal-box {
+            background: white; padding: 25px; width: 90%; max-width: 400px;
+            border-radius: 8px; text-align: left; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .close-btn {
+            background: #007bff; color: white; border: none; padding: 10px 20px;
+            border-radius: 4px; cursor: pointer; float: right; margin-top: 10px;
+        }
     </style>
 </head>
 <body>
 
     <div id="modal-overlay">
         <div id="modal-box">
-            <h3>Patch Notes v1.2.2</h3>
+            <h3>Patch Notes v1.4</h3>
             <ul>
-                <li><strong>Critical Fix:</strong> Added `mainName: 'main'` config.</li>
-                <li><strong>Fix:</strong> Solved "proxy_main" assertion error.</li>
-                <li><strong>Info:</strong> Progress bar enabled.</li>
+                <li><strong>New:</strong> "Savings" calculator (shows % saved).</li>
+                <li><strong>Update:</strong> Result size turns green when ready.</li>
             </ul>
             <button class="close-btn" onclick="document.getElementById('modal-overlay').style.display='none'">Got it!</button>
         </div>
     </div>
 
     <h2>Video Shrinker</h2>
-    <input type="file" id="u" accept="video/*"><br><br>
+    
+    <div>
+        <input type="file" id="u" accept="video/*">
+        <select id="res">
+            <option value="240">240p</option>
+            <option value="360">360p</option>
+            <option value="480">480p</option>
+            <option value="540" selected>540p (Default)</option>
+            <option value="720">720p</option>
+        </select>
+    </div>
+    <br>
+    
+    <div class="stats">
+        <div class="stat-box">Original: <strong id="size-in">-</strong></div>
+        <div class="stat-box">Result: <span id="size-out">-</span></div>
+    </div>
+
+    <br>
     <button id="b" disabled>Convert</button>
     
     <div id="progress-container">
@@ -76,20 +82,29 @@
 
     const ffmpeg = createFFmpeg({ 
         log: true,
-        // CRITICAL FIX: The Single Threaded core exports 'main', not 'proxy_main'.
         mainName: 'main', 
         corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
     });
 
     const u = document.getElementById('u');
+    const res = document.getElementById('res');
     const b = document.getElementById('b');
     const l = document.getElementById('l');
     const pContainer = document.getElementById('progress-container');
     const pBar = document.getElementById('p');
     const pText = document.getElementById('t');
+    const sizeIn = document.getElementById('size-in');
+    const sizeOut = document.getElementById('size-out');
+
+    const formatBytes = (bytes) => {
+        if(bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    };
 
     ffmpeg.setProgress(({ ratio }) => {
-        // Ensure ratio is valid before calculating
         if (ratio > 0 && ratio <= 1) {
             const percent = (ratio * 100).toFixed(0);
             pBar.value = percent;
@@ -104,7 +119,14 @@
         } catch(e) { l.innerText = "Error: " + e.message; }
     })();
 
-    u.onchange = () => b.disabled = false;
+    u.onchange = () => {
+        b.disabled = false;
+        if(u.files[0]) {
+            sizeIn.innerText = formatBytes(u.files[0].size);
+            sizeOut.innerText = "-";
+            sizeOut.className = ""; // Reset color
+        }
+    };
 
     b.onclick = async () => {
         if(!u.files[0]) return;
@@ -115,16 +137,26 @@
         pText.innerText = "0%";
         
         try {
+            const resolution = res.value;
+            const originalSize = u.files[0].size;
+
             ffmpeg.FS('writeFile', 'in', await fetchFile(u.files[0]));
-            
-            // Run FFmpeg
-            await ffmpeg.run('-i','in','-vf','scale=-2:540','-c:v','libx264','-preset','ultrafast','out.mp4');
+            await ffmpeg.run('-i','in','-vf',`scale=-2:${resolution}`,'-c:v','libx264','-preset','ultrafast','out.mp4');
             
             const data = ffmpeg.FS('readFile','out.mp4');
-            const url = URL.createObjectURL(new Blob([data.buffer], {type:'video/mp4'}));
+            const newSize = data.byteLength;
             
+            // Calculate savings
+            const savings = ((originalSize - newSize) / originalSize) * 100;
+            const savingsText = savings > 0 ? `(-${savings.toFixed(0)}%)` : `(+${Math.abs(savings).toFixed(0)}%)`;
+
+            // Display Result with Green Color
+            sizeOut.innerText = `${formatBytes(newSize)} ${savingsText}`;
+            sizeOut.className = "result-success";
+
+            const url = URL.createObjectURL(new Blob([data.buffer], {type:'video/mp4'}));
             pBar.value = 100; pText.innerText = "100%";
-            l.innerHTML = `<a href="${url}" download="video.mp4">Download Video</a>`;
+            l.innerHTML = `<a href="${url}" download="video_${resolution}p.mp4">Download Video</a>`;
         } catch(e) {
             l.innerText = e.message;
         }
