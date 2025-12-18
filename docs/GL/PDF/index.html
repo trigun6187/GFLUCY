@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Video Shrinker v1.2.1</title>
+    <title>Video Shrinker v1.2.2</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
     
@@ -49,11 +49,11 @@
 
     <div id="modal-overlay">
         <div id="modal-box">
-            <h3>Patch Notes v1.2.1</h3>
+            <h3>Patch Notes v1.2.2</h3>
             <ul>
-                <li><strong>Fix:</strong> Resolved "proxy_main" crash.</li>
-                <li><strong>Fix:</strong> Updated engine to v0.11.6.</li>
-                <li><strong>Info:</strong> Progress bar is ready.</li>
+                <li><strong>Critical Fix:</strong> Added `mainName: 'main'` config.</li>
+                <li><strong>Fix:</strong> Solved "proxy_main" assertion error.</li>
+                <li><strong>Info:</strong> Progress bar enabled.</li>
             </ul>
             <button class="close-btn" onclick="document.getElementById('modal-overlay').style.display='none'">Got it!</button>
         </div>
@@ -76,7 +76,8 @@
 
     const ffmpeg = createFFmpeg({ 
         log: true,
-        // We use the 0.11.1 Single Threaded core, which works with the 0.11.x wrapper
+        // CRITICAL FIX: The Single Threaded core exports 'main', not 'proxy_main'.
+        mainName: 'main', 
         corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
     });
 
@@ -88,9 +89,12 @@
     const pText = document.getElementById('t');
 
     ffmpeg.setProgress(({ ratio }) => {
-        const percent = (ratio * 100).toFixed(0);
-        pBar.value = percent;
-        pText.innerText = `${percent}%`;
+        // Ensure ratio is valid before calculating
+        if (ratio > 0 && ratio <= 1) {
+            const percent = (ratio * 100).toFixed(0);
+            pBar.value = percent;
+            pText.innerText = `${percent}%`;
+        }
     });
 
     (async()=>{
