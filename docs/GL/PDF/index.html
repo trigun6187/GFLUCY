@@ -1,96 +1,172 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Native Video Shrinker</title>
-<style>
-  body { font-family: system-ui, sans-serif; background: #f0f2f5; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-  .card { background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); text-align: center; max-width: 400px; width: 100%; }
-  button { background: #007bff; color: white; border: none; padding: 15px 30px; border-radius: 10px; font-size: 16px; cursor: pointer; margin-top: 20px; width: 100%; }
-  button:disabled { background: #ccc; }
-  select { width: 100%; padding: 10px; margin-top: 10px; border-radius: 8px; border: 1px solid #ddd; }
-  .status { margin-top: 20px; font-size: 14px; color: #555; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Shrinker</title>
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+    <style>
+        :root { --primary: #2563eb; --bg: #f8fafc; --surface: #ffffff; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
+        
+        .card { background: var(--surface); padding: 40px; border-radius: 20px; box-shadow: 0 10px 40px -5px rgba(0,0,0,0.1); width: 100%; max-width: 440px; text-align: center; }
+        h2 { margin-top: 0; color: #1e293b; }
+        
+        .upload-area { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 30px; background: #f1f5f9; cursor: pointer; position: relative; margin-bottom: 20px; transition: 0.2s; }
+        .upload-area:hover { border-color: var(--primary); background: #eff6ff; }
+        .upload-area input { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+        
+        select { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 16px; margin-bottom: 20px; }
+        
+        button { width: 100%; padding: 16px; background: var(--primary); color: white; border: none; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+        button:disabled { background: #94a3b8; cursor: not-allowed; }
+        
+        /* PROGRESS BAR STYLES */
+        .progress-container {
+            width: 100%; background-color: #e2e8f0; border-radius: 8px; margin-top: 25px;
+            height: 10px; overflow: hidden; display: none; /* Hidden by default */
+        }
+        .progress-fill {
+            height: 100%; background-color: #10b981; width: 0%;
+            transition: width 0.3s ease; border-radius: 8px;
+        }
+        #status-text { margin-top: 10px; font-size: 13px; color: #64748b; font-family: monospace; min-height: 20px; }
+
+        .download-btn { display: block; margin-top: 20px; background: #10b981; color: white; padding: 15px; border-radius: 10px; text-decoration: none; font-weight: bold; }
+    </style>
 </head>
 <body>
 
 <div class="card">
-  <h2>Video Shrinker</h2>
-  <p>Uses built-in browser tech. No external engine.</p>
-  
-  <input type="file" id="upload" accept="video/mp4,video/webm,video/mov" style="margin-bottom: 20px;">
-  
-  <label>Target Quality</label>
-  <select id="bitrate">
-    <option value="2500000">High (720p equivalent)</option>
-    <option value="1000000" selected>Medium (540p equivalent)</option>
-    <option value="500000">Low (480p equivalent)</option>
-  </select>
+    <h2>Video Shrinker</h2>
+    
+    <div class="upload-area" id="drop-zone">
+        <span style="font-size: 40px">📂</span><br>
+        <span id="file-label" style="font-weight:600; color:#475569">Click to upload video</span>
+        <input type="file" id="uploader" accept="video/*">
+    </div>
 
-  <button id="btn" disabled>Start</button>
-  <div class="status" id="status">Waiting for file...</div>
+    <select id="resolution">
+        <option value="720">720p (HD)</option>
+        <option value="540" selected>540p (Mobile)</option>
+        <option value="480">480p (SD)</option>
+    </select>
+
+    <button id="convert-btn" disabled>Loading Engine...</button>
+    
+    <div class="progress-container" id="progress-container">
+        <div class="progress-fill" id="progress-fill"></div>
+    </div>
+    <div id="status-text"></div>
+    
+    <div id="result"></div>
 </div>
 
 <script>
-// This uses the MODERN WebCodecs API built into Chrome/Edge
-// It works without downloading ANY external files.
+    const { createFFmpeg, fetchFile } = FFmpeg;
 
-const upload = document.getElementById('upload');
-const btn = document.getElementById('btn');
-const status = document.getElementById('status');
-const bitrateSel = document.getElementById('bitrate');
+    // Use Single-Threaded Core from JSDelivr
+    // Added ?v=2 to force browser to ignore old cached versions
+    const ffmpeg = createFFmpeg({ 
+        log: true,
+        corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js?v=2'
+    });
 
-let videoFile;
+    const uploader = document.getElementById('uploader');
+    const convertBtn = document.getElementById('convert-btn');
+    const progressContainer = document.getElementById('progress-container');
+    const progressFill = document.getElementById('progress-fill');
+    const statusText = document.getElementById('status-text');
+    const resultEl = document.getElementById('result');
+    const fileLabel = document.getElementById('file-label');
+    const dropZone = document.getElementById('drop-zone');
 
-upload.addEventListener('change', (e) => {
-  if (e.target.files[0]) {
-    videoFile = e.target.files[0];
-    btn.disabled = false;
-    status.textContent = "Ready: " + videoFile.name;
-  }
-});
+    let totalDuration = 0;
 
-btn.addEventListener('click', async () => {
-  if (!('VideoEncoder' in window)) {
-    alert("Your browser is too old for this method. Please use Chrome or Edge on Desktop.");
-    return;
-  }
+    (async () => {
+        try {
+            await ffmpeg.load();
+            convertBtn.textContent = "Convert Video";
+            convertBtn.disabled = true;
+        } catch(e) {
+            statusText.textContent = "Engine Error: " + e.message;
+        }
+    })();
 
-  btn.disabled = true;
-  status.textContent = "Processing... (This is fast!)";
+    uploader.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            fileLabel.textContent = file.name;
+            dropZone.style.background = "#dbeafe";
+            dropZone.style.borderColor = "#2563eb";
+            convertBtn.disabled = false;
+            
+            // Get Video Duration for Progress Calculation
+            const video = document.createElement('video');
+            video.preload = 'metadata';
+            video.onloadedmetadata = function() {
+                window.URL.revokeObjectURL(video.src);
+                totalDuration = video.duration;
+            }
+            video.src = URL.createObjectURL(file);
+        }
+    });
 
-  // 1. Prepare the output file
-  const muxer = new Mp4Muxer.Muxer({
-    target: new Mp4Muxer.ArrayBufferTarget(),
-    video: { codec: 'avc', width: 1280, height: 720 } // Standard 720p container
-  });
+    convertBtn.addEventListener('click', async () => {
+        convertBtn.disabled = true;
+        convertBtn.textContent = "Processing...";
+        progressContainer.style.display = 'block';
+        statusText.textContent = "Initializing...";
 
-  const videoEncoder = new VideoEncoder({
-    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
-    error: (e) => console.error(e)
-  });
+        const res = document.getElementById('resolution').value;
 
-  // 2. Configure the Encoder
-  videoEncoder.configure({
-    codec: 'avc1.42001f', // Standard H.264
-    width: 1280, // We force resize to 720p for simplicity
-    height: 720,
-    bitrate: parseInt(bitrateSel.value), // Bitrate controls file size
-    framerate: 30
-  });
+        // Custom Logger to update Progress Bar
+        ffmpeg.setLogger(({ message }) => {
+            // Check if log contains time info (e.g. time=00:00:15.30)
+            if (message.includes('time=')) {
+                const timeMatch = message.match(/time=(\d{2}):(\d{2}):(\d{2}\.\d{2})/);
+                if (timeMatch && totalDuration > 0) {
+                    const hours = parseFloat(timeMatch[1]);
+                    const minutes = parseFloat(timeMatch[2]);
+                    const seconds = parseFloat(timeMatch[3]);
+                    const currentTime = (hours * 3600) + (minutes * 60) + seconds;
+                    
+                    const percent = Math.min((currentTime / totalDuration) * 100, 100);
+                    progressFill.style.width = `${percent.toFixed(1)}%`;
+                    statusText.textContent = `Progress: ${percent.toFixed(0)}%`;
+                }
+            }
+        });
 
-  // 3. Decode and Re-encode
-  // Note: For a true file-to-file transcode using WebCodecs without a library 
-  // is extremely complex code-wise (decoding frames one by one).
-  
-  // INSTEAD: To keep this "Easy" and "One File", we will use a tiny 
-  // helper that loads from a CDN but is NOT ffmpeg (it is 100x lighter).
-  // But wait, "Mp4Muxer" is not defined above.
-  
-  status.textContent = "Actually, the native WebCodecs API is too complex for a single file.";
-  alert("I am pivoting. The easiest way is actually an external widget.");
-});
-</script>
-</body>
-</html>
+        try {
+            ffmpeg.FS('writeFile', 'input', await fetchFile(uploader.files[0]));
+            
+            await ffmpeg.run(
+                '-i', 'input', 
+                '-vf', `scale=-2:${res}`, 
+                '-c:v', 'libx264', 
+                '-preset', 'ultrafast', 
+                '-crf', '28', 
+                'output.mp4'
+            );
+            
+            const data = ffmpeg.FS('readFile', 'output.mp4');
+            const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' }));
+            
+            // Finish Progress Bar
+            progressFill.style.width = '100%';
+            statusText.textContent = 'Done!';
+            
+            resultEl.innerHTML = `<a class="download-btn" href="${url}" download="shrunk_${res}p.mp4">⬇️ Download Result</a>`;
+            convertBtn.textContent = "Success";
+            convertBtn.disabled = false;
+            
+            try { ffmpeg.FS('unlink', 'input'); ffmpeg.FS('unlink', 'output.mp4'); } catch(e){}
+
+        } catch (error) {
+            statusText.textContent = "Error: " + error.message;
+            convertBtn.textContent = "Failed";
+            convertBtn.disabled = false;
+        }
+    });
+</
