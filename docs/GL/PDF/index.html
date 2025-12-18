@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Shrinker</title>
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --bg: #f8fafc;
+            --surface: #ffffff;
+            --text: #1e293b;
+            --border: #e2e8f0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .card {
+            background: var(--surface);
+            padding: 40px;
+            border-radius: 24px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            width: 100%;
+            max-width: 420px;
+            text-align: center;
+        }
+
+        h2 { margin-top: 0; font-weight: 700; color: #0f172a; }
+        p { color: #64748b; margin-bottom: 25px; font-size: 0.95rem; }
+
+        /* Modern Upload Area */
+        .upload-area {
+            border: 2px dashed #cbd5e1;
+            border-radius: 16px;
+            padding: 40px 20px;
+            background: #f1f5f9;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s ease;
+        }
+
+        .upload-area:hover {
+            border-color: var(--primary);
+            background: #eff6ff;
+            transform: translateY(-2px);
+        }
+
+        .upload-area input {
+            position: absolute; width: 100%; height: 100%; top: 0; left: 0; opacity: 0; cursor: pointer;
+        }
+
+        .icon { font-size: 48px; display: block; margin-bottom: 12px; }
+        .label { font-weight: 600; color: #475569; }
+
+        /* Controls */
+        .controls { margin-top: 25px; text-align: left; }
+        
+        label { font-size: 0.85rem; font-weight: 600; color: #64748b; margin-left: 4px; }
+        
+        select {
+            width: 100%;
+            padding: 12px 16px;
+            margin-top: 8px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            font-size: 1rem;
+            background-color: var(--surface);
+            cursor: pointer;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        select:focus { border-color: var(--primary); }
+
+        /* Action Button */
+        button {
+            width: 100%;
+            padding: 16px;
+            margin-top: 25px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            background-color: var(--primary);
+            color: white;
+            transition: background-color 0.2s, transform 0.1s;
+            box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+        }
+
+        button:hover:not(:disabled) { background-color: #1d4ed8; }
+        button:active:not(:disabled) { transform: scale(0.98); }
+        button:disabled { background-color: #94a3b8; cursor: not-allowed; box-shadow: none; }
+
+        /* Progress & Logs */
+        #status-container {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px; height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        #log-text { font-size: 0.85rem; color: #64748b; margin-top: 10px; font-family: monospace; }
+
+        .download-btn {
+            display: flex; align-items: center; justify-content: center;
+            background-color: #10b981; color: white; text-decoration: none;
+            padding: 16px; border-radius: 12px; font-weight: bold; margin-top: 20px;
+            box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2);
+            transition: transform 0.1s;
+        }
+        .download-btn:hover { background-color: #059669; transform: translateY(-2px); }
+
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>Video Shrinker</h2>
+    <p>Reduce file size instantly. No data leaves your device.</p>
+    
+    <div class="upload-area" id="drop-zone">
+        <span class="icon">📂</span>
+        <span class="label" id="file-label">Click to select video</span>
+        <input type="file" id="uploader" accept="video/*">
+    </div>
+
+    <div class="controls">
+        <label>Target Resolution</label>
+        <select id="resolution">
+            <option value="720">720p (HD - Best Quality)</option>
+            <option value="540" selected>540p (Mobile - Balanced)</option>
+            <option value="480">480p (SD - Smallest)</option>
+        </select>
+    </div>
+
+    <button id="convert-btn" disabled>
+        Loading Engine...
+    </button>
+    
+    <div id="status-container">
+        <div id="log-text">Initializing...</div>
+    </div>
+    
+    <div id="result"></div>
+</div>
+
+<script>
+    const { createFFmpeg, fetchFile } = FFmpeg;
+
+    // === MODERN CONFIGURATION ===
+    // 1. We use unpkg for the Loader (v0.11.6)
+    // 2. We explicitly point to the Single-Threaded Core (v0.11.1) to bypass header restrictions.
+    const ffmpeg = createFFmpeg({ 
+        log: true,
+        corePath: 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
+    });
+
+    const uploader = document.getElementById('uploader');
+    const convertBtn = document.getElementById('convert-btn');
+    const statusContainer = document.getElementById('status-container');
+    const logText = document.getElementById('log-text');
+    const resultEl = document.getElementById('result');
+    const fileLabel = document.getElementById('file-label');
+    const dropZone = document.getElementById('drop-zone');
+    
+    let selectedFile = null;
+
+    // Initialize Engine
+    (async () => {
+        try {
+            await ffmpeg.load();
+            convertBtn.textContent = "Convert Video";
+            convertBtn.disabled = true; 
+        } catch(e) {
+            logText.innerText = "Error loading engine: " + e.message;
+            statusContainer.style.display = 'block';
+        }
+    })();
+
+    // UI: File Selection
+    uploader.addEventListener('change', (e) => {
+        selectedFile = e.target.files[0];
+        if (selectedFile) {
+            fileLabel.textContent = selectedFile.name;
+            dropZone.style.borderColor = '#2563eb';
+            dropZone.style.background = '#eff6ff';
+            convertBtn.disabled = false;
+            resultEl.innerHTML = ''; 
+            statusContainer.style.display = 'none';
+        }
+    });
+
+    // ACTION: Convert
+    convertBtn.addEventListener('click', async () => {
+        if (!selectedFile) return;
+        
+        // Lock UI
+        convertBtn.disabled = true;
+        convertBtn.innerHTML = '<span class="spinner"></span> Processing...';
+        statusContainer.style.display = 'block';
+        
+        const res = document.getElementById('resolution').value;
+
+        // Custom Logger
+        ffmpeg.setLogger(({ message }) => {
+            // Only show user-friendly time updates
+            if (message.includes('time=')) {
+                logText.innerText = "Encoding: " + message.match(/time=[\d:.]+/)[0];
+            }
+        });
+
+        try {
+            // 1. Write File
+            logText.innerText = "Loading video into memory...";
+            ffmpeg.FS('writeFile', 'input', await fetchFile(selectedFile));
+
+            // 2. Run FFmpeg
+            logText.innerText = "Starting conversion (this may take a minute)...";
+            await ffmpeg.run(
+                '-i', 'input', 
+                '-vf', `scale=-2:${res}`, 
+                '-c:v', 'libx264', 
+                '-preset', 'ultrafast', 
+                '-crf', '28', 
+                'output.mp4'
+            );
+
+            // 3. Read Output
+            logText.innerText = "Finalizing...";
+            const data = ffmpeg.FS('readFile', 'output.mp4');
+            const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' }));
+            
+            // 4. Success UI
+            resultEl.innerHTML = `<a class="download-btn" href="${url}" download="shrunk_${res}p.mp4">⬇️ Download Video</a>`;
+            
+            convertBtn.textContent = "Conversion Complete";
+            convertBtn.disabled = false;
+            logText.innerText = "Done!";
+
+            // Cleanup to free memory
+            try { ffmpeg.FS('unlink', 'input'); ffmpeg.FS('unlink', 'output.mp4'); } catch(e){}
+
+        } catch (error) {
+            console.error(error);
+            logText.innerText = "Error: " + error.message;
+            convertBtn.textContent = "Failed";
+            convertBtn.disabled = false;
+        }
+    });
+</script>
+</body>
+</html>
