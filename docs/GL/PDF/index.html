@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Shrinker (Self-Hosted)</title>
+    <title>Video Shrinker (Single Threaded)</title>
     
     <script src="./ffmpeg.min.js"></script>
     
@@ -43,8 +43,9 @@
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
 
-    // SELF-HOSTED SETUP
-    // This looks for "ffmpeg-core.js" in the same folder.
+    // SINGLE-THREADED SETUP
+    // We point to the local core file. 
+    // Since we downloaded the "Core-ST" (Single Threaded) version, it will work without SharedArrayBuffer.
     const ffmpeg = createFFmpeg({ 
         log: true,
         corePath: './ffmpeg-core.js'
@@ -55,7 +56,6 @@
     const logEl = document.getElementById('log');
     const resultEl = document.getElementById('result');
     const fileLabel = document.getElementById('file-label');
-    let selectedFile = null;
 
     (async () => {
         try {
@@ -63,37 +63,48 @@
             convertBtn.textContent = "Convert Video";
             convertBtn.disabled = true;
         } catch(e) {
-            logEl.textContent = "Error: " + e.message + "\nCheck if files are uploaded.";
+            logEl.textContent = "Error: " + e.message;
         }
     })();
 
     uploader.addEventListener('change', (e) => {
-        selectedFile = e.target.files[0];
-        if (selectedFile) {
-            fileLabel.textContent = selectedFile.name;
+        if(e.target.files[0]) {
+            fileLabel.textContent = e.target.files[0].name;
             convertBtn.disabled = false;
         }
     });
 
     convertBtn.addEventListener('click', async () => {
-        if (!selectedFile) return;
         convertBtn.disabled = true;
-        convertBtn.textContent = "Processing...";
+        convertBtn.textContent = "Processing... (Do not close tab)";
         logEl.textContent = "Starting...";
-
+        const res = document.getElementById('resolution').value;
+        
         ffmpeg.setLogger(({ message }) => {
-            if (message.includes('time=')) logEl.textContent = message;
+            if (message.includes('time=')) logEl.textContent = "Encoding: " + message;
         });
 
         try {
-            const res = document.getElementById('resolution').value;
-            ffmpeg.FS('writeFile', 'input', await fetchFile(selectedFile));
-            await ffmpeg.run('-i', 'input', '-vf', `scale=-2:${res}`, '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', 'output.mp4');
+            ffmpeg.FS('writeFile', 'input', await fetchFile(uploader.files[0]));
+            
+            // v0.11.x Syntax
+            await ffmpeg.run(
+                '-i', 'input', 
+                '-vf', `scale=-2:${res}`, 
+                '-c:v', 'libx264', 
+                '-preset', 'ultrafast', 
+                '-crf', '28', 
+                'output.mp4'
+            );
+            
             const data = ffmpeg.FS('readFile', 'output.mp4');
             const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' }));
             resultEl.innerHTML = `<a class="download-btn" href="${url}" download="shrunk_${res}p.mp4">⬇️ Download Result</a>`;
             convertBtn.textContent = "Done!";
             convertBtn.disabled = false;
+            
+            try { ffmpeg.FS('unlink', 'input'); ffmpeg.FS('unlink', 'output.mp4'); } catch(e){}
+
         } catch (error) {
             logEl.textContent = "Error: " + error.message;
             convertBtn.textContent = "Failed";
