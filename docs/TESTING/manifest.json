@@ -1,0 +1,21 @@
+{
+    "name": "Taylor Swift Fan Chatroom",
+    "short_name": "SwiftChat",
+    "description": "A chatroom for Taylor Swift fans to vote on which music video plays next",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#121212",
+    "theme_color": "#ff6b9d",
+    "icons": [
+        {
+            "src": "icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}
