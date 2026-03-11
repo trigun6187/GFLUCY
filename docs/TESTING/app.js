@@ -9,8 +9,8 @@ const taylorSwiftVideos = [
         id: '1',
         title: 'Blank Space',
         description: 'Official Music Video for "Blank Space" by Taylor Swift',
-        thumbnail: 'https://img.youtube.com/vi/9bZkp7q19f0/maxresdefault.jpg',
-        videoId: '9bZkp7q19f0'
+        thumbnail: 'https://img.youtube.com/vi/e-ORhEE9VVg/maxresdefault.jpg',
+        videoId: 'e-ORhEE9VVg'
     },
     {
         id: '2',
