@@ -51,6 +51,8 @@ const taylorSwiftVideos = [
 let player;
 let isYouTubeReady = false;
 let currentVideoId = '';
+let swiftieCounter = 1;
+let usedSwiftieNames = new Set();
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', function() {
@@ -69,6 +71,25 @@ document.addEventListener('DOMContentLoaded', function() {
     // Set up service worker for PWA
     setupServiceWorker();
 });
+
+// Generate a unique Swiftie username
+function generateSwiftieUsername() {
+    let username;
+    // Try to find the next available number
+    while (usedSwiftieNames.has(`Swifties${swiftieCounter}`)) {
+        swiftieCounter++;
+    }
+    username = `Swifties${swiftieCounter}`;
+    usedSwiftieNames.add(username);
+    swiftieCounter++;
+    return username;
+}
+
+// Release a username when user leaves (simplified for this demo)
+function releaseSwiftieUsername(username) {
+    // In a real app, this would remove the username from the used set
+    // For this demo, we'll just keep track of the counter
+}
 
 // Load YouTube API
 function loadYouTubeAPI() {
@@ -198,6 +219,10 @@ function setupEventListeners() {
 function initializeChat() {
     // Add welcome message
     addMessage('system', 'Welcome to the Taylor Swift Fan Chatroom! Vote for videos to play next.');
+    
+    // Generate and display a welcome message with automatic username
+    const username = generateSwiftieUsername();
+    addMessage('system', `You are now known as ${username} in this chatroom!`);
 }
 
 // Add message to chat
@@ -221,16 +246,11 @@ function addMessage(type, message, username = 'System') {
 
 // Send message
 function sendMessage() {
-    const usernameInput = document.getElementById('username');
     const messageInput = document.getElementById('message-input');
-    const username = usernameInput.value.trim();
     const message = messageInput.value.trim();
     
-    // Validate username (no cursing, no suggestive content)
-    if (!isValidUsername(username)) {
-        addMessage('system', 'Please enter a valid username (no cursing or suggestive content allowed)');
-        return;
-    }
+    // Generate automatic Swiftie username
+    const username = generateSwiftieUsername();
     
     // Validate message
     if (message) {

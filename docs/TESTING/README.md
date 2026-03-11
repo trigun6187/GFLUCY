@@ -23,22 +23,48 @@ A Progressive Web App (PWA) for Taylor Swift fans to chat and vote on which musi
 
 To host this app on GitHub Pages:
 
-1. Create a new repository on GitHub
-2. Push this code to your repository
-3. Go to your repository settings
-4. In the "Pages" section, select "Deploy from a branch"
-5. Choose "main" branch and "/ (root)" folder
-6. Save and your site will be live at `https://<username>.github.io/<repository-name>`
+### Step-by-Step Instructions:
+
+1. **Create a new GitHub repository**
+   - Go to GitHub.com and create a new repository
+   - Name it something like `taylor-swift-chatroom`
+   - Make sure it's public
+
+2. **Upload your files**
+   - You can either:
+     - Clone the repository locally and add all the files we created
+     - Or upload the files directly through GitHub's web interface
+
+3. **Push files to GitHub**
+   If cloning locally:
+   ```bash
+   git clone https://github.com/your-username/taylor-swift-chatroom.git
+   cd taylor-swift-chatroom
+   # Add all your files here
+   git add .
+   git commit -m "Initial commit"
+   git push origin main
+   ```
+
+4. **Enable GitHub Pages**
+   - Go to your repository on GitHub
+   - Click on "Settings" tab
+   - Scroll down to "Pages" section
+   - Under "Source", select "Deploy from a branch"
+   - Choose "main" branch and "/ (root)" folder
+   - Click "Save"
+   - Your site will be live at `https://your-username.github.io/taylor-swift-chatroom`
+
+## Files Included
+
+- `index.html` - Main application structure
+- `styles.css` - Dark mode styling with vibrant colors
+- `app.js` - JavaScript functionality for chat and voting
+- `sw.js` - Service worker for PWA functionality
+- `manifest.json` - PWA manifest file
+- `README.md` - This documentation file
 
 ## Technical Details
-
-- Built as a Progressive Web App (PWA)
-- Uses YouTube IFrame API for video playback
-- Responsive design with CSS Grid and Flexbox
-- Service Worker for offline functionality
-- Manifest file for PWA installation
-
-## Development
 
 This is a client-side only application. For a production version, you would need to:
 
@@ -48,6 +74,24 @@ This is a client-side only application. For a production version, you would need
    - Vote tracking
 2. Add proper error handling
 3. Implement real-time updates using WebSockets or similar
+
+## Troubleshooting
+
+### YouTube Player Issues
+If you encounter YouTube player errors:
+- The error "Error 153: Video player configuration error" is common with certain video IDs
+- This is a known limitation with YouTube's API and may occur due to:
+  - Video unavailability
+  - Network restrictions
+  - YouTube's content restrictions
+- The application gracefully handles these errors and continues to function for all other features
+
+### GitHub Pages Deployment Issues
+If your site doesn't load properly:
+1. Make sure you're using the correct branch (main)
+2. Make sure the root folder is selected
+3. Wait a few minutes for GitHub Pages to build
+4. Check the GitHub Pages section in repository settings for any error messages
 
 ## License
 
